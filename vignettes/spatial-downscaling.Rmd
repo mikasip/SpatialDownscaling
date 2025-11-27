@@ -1,0 +1,1313 @@
+---
+title: "Statistical Downscaling"
+output: pdf_document
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Statistical Downscaling}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(ECoST)
+library(ggplot2)
+library(reshape2)
+library(abind)
+library(gridExtra)
+```
+
+# Statistical Downscaling of Weather Data
+
+## Introduction
+
+Climate and weather data often come at coarse spatial resolutions that may not be suitable for local impact studies. Statistical downscaling methods aim to bridge this gap by generating high-resolution data from low-resolution inputs. 
+This vignette demonstrates five approaches for spatial downscaling implemented in the `ECoST` package:
+
+1. **Bias Correction and Spatial Disaggregation (BCSD)**: A traditional statistical approach that combines bias correction with spatial interpolation.
+2. **Super-Resolution Convolutional Neural Network (SRDRN)**: A deep learning-based method that uses convolutional neural networks to learn the mapping between coarse and fine-scale data.
+3. **Time-Aware SRDRN**: An extension of SRDRN that incorporates temporal information to improve downscaling performance.
+4. **U-Net**: An advanced deep learning architecture with skip connections that preserves spatial structures at multiple scales.
+5. **Time-Aware U-Net**: An extension of U-Net that incorporates temporal information to improve downscaling performance.
+
+These methods are applied to the `weather_italy` dataset, which contains grid-based spatiotemporal climate data of Italy. 
+The goal is to train models on coarse data and predict the fine-scale data at the original grid points.
+
+## The Data
+
+The `weather_italy` dataset is a small subset of the ERA5Land dataset created for demonstration purposes. 
+It contains daily weather data for Italy, including relative humidity, temperature, and total precipitation.
+
+The `weather_italy` dataset is a 4D array with the following dimensions:
+
+- **Longitude**: 60 grid points from 36.0 to 47.8 degrees at 0.2 degree resolution.
+
+- **Latitude**: 60 grid points from 7.3 to 19.0 degrees at 0.2 degree resolution.
+
+- **Variables**: 3 variables (relative humidity, temperature, total precipitation).
+  - **Relative Humidity**: Daily mean relative humidity (%).
+  - **Temperature**: Daily mean temperature (°C).
+  - **Total Precipitation**: Cumulative daily precipitation in mm.
+
+- **Time**: 61 days (from 2023/11/01 to 2023/12/31)
+
+```{r}
+data("weather_italy") # Load the bundled data
+
+# Examine the data
+dim(weather_italy)
+str(weather_italy)
+```
+## Utility Functions for Visualization and Evaluation
+
+Various utility functions are first defined for consistent visualization and evaluation across all five downscaling methods:
+
+```{r}
+# Function to plot a single variable at a specific time point
+plot_variable <- function(data, time_idx = 1, var_idx = 1, title = "",
+                          var_range = NULL) {
+  data_subset <- data[, , var_idx, time_idx]
+  data_melted <- melt(data_subset)
+  colnames(data_melted) <- c("Longitude", "Latitude", "Value")
+
+  ggplot(data_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = paste(title, "at Time Index", time_idx)) +
+    theme_minimal() +
+    coord_fixed()
+}
+
+# Function to compare coarse, predicted, and true fine-scale data
+compare_methods <- function(coarse_data, predicted_data, true_data,
+                            var_idx, time_idx, title, var_range = NULL,
+                            method_name = "Method") {
+  # Plot coarse data
+  coarse_subset <- coarse_data[, , var_idx, time_idx]
+  coarse_melted <- melt(coarse_subset)
+  colnames(coarse_melted) <- c("Longitude", "Latitude", "Value")
+
+  p1 <- ggplot(coarse_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "Coarse Input") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Plot predicted data
+  pred_subset <- predicted_data[, , var_idx, time_idx]
+  pred_melted <- melt(pred_subset)
+  colnames(pred_melted) <- c("Longitude", "Latitude", "Value")
+
+  p2 <- ggplot(pred_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = paste(method_name, "Prediction")) +
+    theme_minimal() +
+    coord_fixed()
+
+  # Plot true fine data
+  true_subset <- true_data[, , var_idx, time_idx]
+  true_melted <- melt(true_subset)
+  colnames(true_melted) <- c("Longitude", "Latitude", "Value")
+
+  p3 <- ggplot(true_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "True Fine Data") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Arrange the plots
+  gridExtra::grid.arrange(p1, p2, p3,
+    ncol = 3,
+    top = grid::textGrob(paste(title, "- Comparison"),
+      gp = grid::gpar(fontsize = 16)
+    )
+  )
+}
+
+# Function to compare multiple downscaling methods
+compare_all_methods <- function(coarse_data, bcsd_preds,
+                                srcnn_preds, unet_preds, true_data,
+                                var_idx, time_idx, title, var_range = NULL) {
+  # Plot coarse data
+  coarse_subset <- coarse_data[, , var_idx, time_idx]
+  coarse_melted <- melt(coarse_subset)
+  colnames(coarse_melted) <- c("Longitude", "Latitude", "Value")
+
+  p1 <- ggplot(coarse_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "Coarse Input") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Plot BCSD predictions
+  bcsd_subset <- bcsd_preds[, , var_idx, time_idx]
+  bcsd_melted <- melt(bcsd_subset)
+  colnames(bcsd_melted) <- c("Longitude", "Latitude", "Value")
+
+  p2 <- ggplot(bcsd_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "BCSD Prediction") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Plot SRDRN predictions
+  srcnn_subset <- srcnn_preds[, , var_idx, time_idx]
+  srcnn_melted <- melt(srcnn_subset)
+  colnames(srcnn_melted) <- c("Longitude", "Latitude", "Value")
+
+  p3 <- ggplot(srcnn_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "SRDRN Prediction") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Plot U-Net predictions
+  unet_subset <- unet_preds[, , var_idx, time_idx]
+  unet_melted <- melt(unet_subset)
+  colnames(unet_melted) <- c("Longitude", "Latitude", "Value")
+
+  p4 <- ggplot(unet_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "U-Net Prediction") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Plot true fine data
+  true_subset <- true_data[, , var_idx, time_idx]
+  true_melted <- melt(true_subset)
+  colnames(true_melted) <- c("Longitude", "Latitude", "Value")
+
+  p5 <- ggplot(true_melted, aes(y = Longitude, x = Latitude)) +
+    geom_raster(aes(fill = Value)) +
+    scale_fill_gradientn(
+      colours = heat.colors(10), name = title,
+      limits = var_range
+    ) +
+    labs(title = "True Fine Data") +
+    theme_minimal() +
+    coord_fixed()
+
+  # Arrange the plots in a grid (with the coarse data and true fine data on the top row)
+  grid.arrange(
+    p1, p5,
+    p2, p3, p4,
+    ncol = 2, nrow = 3,
+    layout_matrix = rbind(c(1, 2), c(3, 4), c(5, NA)),
+    top = grid::textGrob(paste(title, "- Method Comparison"),
+      gp = grid::gpar(fontsize = 16)
+    )
+  )
+}
+
+calculate_metrics <- function(predicted, actual) {
+  # Mean Absolute Error
+  mae <- mean(abs(predicted - actual), na.rm = TRUE)
+
+  # Root Mean Squared Error
+  rmse <- sqrt(mean((predicted - actual)^2, na.rm = TRUE))
+
+  # Coefficient of Determination (R-squared)
+  ss_tot <- sum((actual - mean(actual, na.rm = TRUE))^2, na.rm = TRUE)
+  ss_res <- sum((actual - predicted)^2, na.rm = TRUE)
+  r_squared <- 1 - (ss_res / ss_tot)
+
+  # Structural Similarity Index (simplified version)
+  # Calculate mean and variance for actual and predicted
+  # Min-max scaling:
+  scaled_actual <- (actual - min(actual, na.rm = TRUE)) / 
+    (max(actual, na.rm = TRUE) - min(actual, na.rm = TRUE))
+  scaled_predicted <- (predicted - min(predicted, na.rm = TRUE)) / 
+    (max(predicted, na.rm = TRUE) - min(predicted, na.rm = TRUE))
+  mu_actual <- mean(scaled_actual, na.rm = TRUE)
+  mu_pred <- mean(scaled_predicted, na.rm = TRUE)
+  var_actual <- var(as.vector(scaled_actual), na.rm = TRUE)
+  var_pred <- var(as.vector(scaled_predicted), na.rm = TRUE)
+
+  # Calculate covariance
+  cov_actual_pred <- cov(as.vector(scaled_actual), as.vector(scaled_predicted),
+    use = "complete.obs"
+  )
+
+  # Constants for stability
+  c1 <- 0.01^2
+  c2 <- 0.03^2
+
+  # Calculate SSIM
+  ssim <- ((2 * mu_actual * mu_pred + c1) * (2 * cov_actual_pred + c2)) /
+    ((mu_actual^2 + mu_pred^2 + c1) * (var_actual + var_pred + c2))
+
+
+  # Kling-Gupta efficiency
+  valid <- complete.cases(predicted, actual)
+  predicted <- predicted[valid]
+  actual  <- actual[valid]
+  
+  # Means and standard deviations
+  mu_pred <- mean(predicted)
+  mu_obs  <- mean(actual)
+  sd_pred <- sd(predicted)
+  sd_obs  <- sd(actual)
+  
+  # Components
+  r <- cor(predicted, actual)                # linear correlation
+  alpha <- sd_pred / sd_obs          # variability ratio
+  beta  <- mu_pred / mu_obs          # bias ratio
+  
+  # Kling–Gupta Efficiency
+  kge <- 1 - sqrt((r - 1)^2 + (alpha - 1)^2 + (beta - 1)^2)
+
+  return(list(MAE = mae, RMSE = rmse, R_squared = r_squared, SSIM = ssim, KGE = kge))
+}
+# Function to create a table comparing metrics across methods
+compare_metrics <- function(bcsd_preds, srdrn_preds, 
+                            tsrdrn_preds, unet_preds, 
+                            tunet_preds, true_data) {
+  # Calculate metrics for each variable and method
+  metrics_bcsd_humidity <- calculate_metrics(
+    bcsd_preds[, , 1, ],
+    true_data[, , 1, ]
+  )
+  metrics_bcsd_temp <- calculate_metrics(
+    bcsd_preds[, , 2, ],
+    true_data[, , 2, ]
+  )
+  metrics_bcsd_precip <- calculate_metrics(
+    bcsd_preds[, , 3, ],
+    true_data[, , 3, ]
+  )
+
+  metrics_srdrn_humidity <- calculate_metrics(
+    srdrn_preds[, , 1, ],
+    true_data[, , 1, ]
+  )
+  metrics_srdrn_temp <- calculate_metrics(
+    srdrn_preds[, , 2, ],
+    true_data[, , 2, ]
+  )
+  metrics_srdrn_precip <- calculate_metrics(
+    srdrn_preds[, , 3, ],
+    true_data[, , 3, ]
+  )
+
+  metrics_tsrdrn_humidity <- calculate_metrics(
+    tsrdrn_preds[, , 1, ],
+    true_data[, , 1, ]
+  )
+  metrics_tsrdrn_temp <- calculate_metrics(
+    tsrdrn_preds[, , 2, ],
+    true_data[, , 2, ]
+  )
+  metrics_tsrdrn_precip <- calculate_metrics(
+    tsrdrn_preds[, , 3, ],
+    true_data[, , 3, ]
+  )
+
+  metrics_unet_humidity <- calculate_metrics(
+    unet_preds[, , 1, ],
+    true_data[, , 1, ]
+  )
+  metrics_unet_temp <- calculate_metrics(
+    unet_preds[, , 2, ],
+    true_data[, , 2, ]
+  )
+  metrics_unet_precip <- calculate_metrics(
+    unet_preds[, , 3, ],
+    true_data[, , 3, ]
+  )
+
+  metrics_tunet_humidity <- calculate_metrics(
+    tunet_preds[, , 1, ],
+    true_data[, , 1, ]
+  )
+  metrics_tunet_temp <- calculate_metrics(
+    tunet_preds[, , 2, ],
+    true_data[, , 2, ]
+  )
+  metrics_tunet_precip <- calculate_metrics(
+    tunet_preds[, , 3, ],
+    true_data[, , 3, ]
+  )
+
+  # Create data frames for each metric
+  mae_df <- data.frame(
+    Variable = c("Humidity", "Temperature", "Precipitation"),
+    BCSD = c(
+      metrics_bcsd_humidity$MAE, metrics_bcsd_temp$MAE,
+      metrics_bcsd_precip$MAE
+    ),
+    SRDRN = c(
+      metrics_srdrn_humidity$MAE, metrics_srdrn_temp$MAE,
+      metrics_srdrn_precip$MAE
+    ),
+    TSRDRN = c(
+      metrics_tsrdrn_humidity$MAE, metrics_tsrdrn_temp$MAE,
+      metrics_tsrdrn_precip$MAE
+    ),
+    UNet = c(
+      metrics_unet_humidity$MAE, metrics_unet_temp$MAE,
+      metrics_unet_precip$MAE
+    ),
+    TUNet = c(
+      metrics_tunet_humidity$MAE, metrics_tunet_temp$MAE,
+      metrics_tunet_precip$MAE
+    )
+  )
+
+  rmse_df <- data.frame(
+    Variable = c("Humidity", "Temperature", "Precipitation"),
+    BCSD = c(
+      metrics_bcsd_humidity$RMSE, metrics_bcsd_temp$RMSE,
+      metrics_bcsd_precip$RMSE
+    ),
+    SRDRN = c(
+      metrics_srdrn_humidity$RMSE, metrics_srdrn_temp$RMSE,
+      metrics_srdrn_precip$RMSE
+    ),
+    TSRDRN = c(
+      metrics_tsrdrn_humidity$RMSE, metrics_tsrdrn_temp$RMSE,
+      metrics_tsrdrn_precip$RMSE
+    ),
+    UNet = c(
+      metrics_unet_humidity$RMSE, metrics_unet_temp$RMSE,
+      metrics_unet_precip$RMSE
+    ),
+    TUNet = c(
+      metrics_tunet_humidity$RMSE, metrics_tunet_temp$RMSE,
+      metrics_tunet_precip$RMSE
+    )
+  )
+
+  kge_df <- data.frame(
+    Variable = c("Humidity", "Temperature", "Precipitation"),
+    BCSD = c(
+      metrics_bcsd_humidity$KGE, metrics_bcsd_temp$KGE,
+      metrics_bcsd_precip$KGE
+    ),
+    SRDRN = c(
+      metrics_srdrn_humidity$KGE, metrics_srdrn_temp$KGE,
+      metrics_srdrn_precip$KGE
+    ),
+    TSRDRN = c(
+      metrics_tsrdrn_humidity$KGE, metrics_tsrdrn_temp$KGE,
+      metrics_tsrdrn_precip$KGE
+    ),
+    UNet = c(
+      metrics_unet_humidity$KGE, metrics_unet_temp$KGE,
+      metrics_unet_precip$KGE
+    ),
+    TUNet = c(
+      metrics_tunet_humidity$KGE, metrics_tunet_temp$KGE,
+      metrics_tunet_precip$KGE
+    )
+  )
+  # Return list of data frames
+  return(list(MAE = mae_df, RMSE = rmse_df, KGE = kge_df))
+}
+```
+
+## Exploring the Data
+
+The three climate variable are visualized at a specific time point for better understanding of the data:
+
+## Load Required Libraries and Data
+```{r, echo=TRUE, out.width="100%", fig.width=8, fig.height=6}
+# Visualize all three variables
+plot_variable(weather_italy, var_idx = 1, title = "Relative Humidity (%)")
+```
+
+```{r, echo=TRUE, out.width="100%", fig.width=8, fig.height=6}
+plot_variable(weather_italy, var_idx = 2, title = "Temperature (°C)")
+```
+
+```{r, echo=TRUE, out.width="100%", fig.width=8, fig.height=6}
+plot_variable(weather_italy, var_idx = 3, title = "Total Precipitation (mm)")
+```
+
+## Creating Coarse Data
+
+For this experiment, the coarse input data is created by sampling the original data at a lower resolution (every second grid point in both dimensions). 
+This simulates the kind of data we might get from a climate model with coarser resolution:
+
+```{r}
+# Create coarse input data (every second grid point)
+coarse_data <- weather_italy[seq(1, 60, 2), seq(1, 60, 2), , ]
+time_points <- 1:61
+
+# Compare resolutions
+cat("Original fine data dimensions:", dim(weather_italy), "\n")
+cat("Coarse data dimensions:", dim(coarse_data), "\n")
+```
+
+## Dividing the Data into Training and Testing Sets
+
+The data is split into training and test sets. 
+The training set will be used to train the spatial downscaling models, while the test set will be used to evaluate the performance of the models.
+The test set is formed by randomly selecting 10 time points from the original data. The training set will consist of the remaining time points.
+
+```{r}
+set.seed(123) # For reproducibility
+test_inds <- sample(1:61, 10)
+train_data_coarse <- coarse_data[, , , -test_inds]
+train_data_fine <- weather_italy[, , , -test_inds]
+train_times <- time_points[-test_inds]
+test_data_coarse <- coarse_data[, , , test_inds]
+test_data_fine <- weather_italy[, , , test_inds]
+test_times <- time_points[test_inds]
+```
+
+## Evaluation Metrics
+
+Several evaluation metrics are used to assess the performance of the downscaling methods:
+
+- **Mean Absolute Error (MAE)**: Measures the average absolute difference between predicted and true values. MAE is calculated as
+$$
+\text{MAE} = \frac{1}{N} \sum_{i=1}^{N} |y_i - \hat{y}_i|,
+$$
+where $y_i$ is the true value, $\hat{y}_i$ is the predicted value, and $N$ is the number of observations.
+
+- **Root Mean Squared Error (RMSE)**: Measures the square root of the average squared differences between predicted and true values. RMSE is calculated as
+$$
+\text{RMSE} = \text{sqrt}(\frac{1}{N} \sum_{i=1}^{N} (y_i - \hat{y}_i)^2).
+$$
+
+- **Kling-Gupta Efficiency (KGE)**: A multi-faceted metric that considers the correlation, bias, and variability between predicted and observed values. KGE is calculated as
+$$
+\text{KGE} = 1 - \sqrt{(r - 1)^2 + ( \frac{\sigma_{pred}}{\sigma_{obs}} - 1)^2 + ( \frac{\mu_{pred}}{\mu_{obs}} - 1)^2},
+$$
+where $r$ is the Pearson correlation coefficient, $\sigma_{pred}$ and $\sigma_{obs}$ are the standard deviations of the observed and predicted values, and $\mu_{pred}$ and $\mu_{obs}$ are the means of the predicted and observed values.
+
+## Method 1: Bias Correction and Spatial Disaggregation (BCSD)
+
+The BCSD [@wood2004hydrologic] method operates in two main steps:
+
+1. **Bias Correction:** Adjusts the coarse-scale data to correct systematic biases by matching the 
+   statistical distribution of the coarse data to that of the fine-scale data. This is typically 
+   achieved using quantile mapping, where the cumulative distribution functions (CDFs) of the 
+   coarse and fine data are aligned.
+
+2. **Spatial Disaggregation:** Enhances the spatial resolution of the bias-corrected data by 
+   interpolating or distributing the data to finer grid points. This step ensures that the 
+   downscaled data retains the spatial variability of the fine-scale data.
+
+The `bcsd` function in the `ECoST` package implements this approach with several configurable parameters:
+
+- **`method`**: This parameter specifies the interpolation method used during spatial disaggregation. The options are:
+  - `'bilinear'`: Performs bilinear interpolation, which is a good balance between accuracy and computational efficiency.
+  - `'bicubic'`: Uses bicubic interpolation, which provides smoother results but is computationally more expensive.
+  - `'nearest'`: Applies nearest neighbor interpolation, which is faster but less accurate. This might be useful for categorical data.
+  
+  The default value is `'bilinear'`. Users may want to modify this parameter based on the desired trade-off between accuracy and computational cost.
+
+- **`n_quantiles`**: This integer parameter determines the number of quantiles used for bias correction. A higher number of quantiles provides finer granularity in the quantile mapping process, which can improve accuracy but may require more computational resources. The default value is `100`. Users working with datasets that have complex distributions may benefit from increasing this value.
+
+- **`reference_period`**: This vector specifies the start and end indices or dates for the reference period used during bias correction. If set to `NULL`, the entire dataset is used as the reference period. Specifying a reference period is useful when the dataset contains distinct temporal patterns or trends that should be excluded from calibration. The default value is `NULL`.
+
+- **`extrapolate`**: A logical parameter that determines whether to extrapolate corrections for values outside the calibration range. If `TRUE`, extrapolation is performed, which can be useful for datasets with extreme values. If `FALSE`, extrapolation is not performed, which may result in more conservative corrections. The default value is `TRUE`.
+
+- **`normalize`**: This logical parameter indicates whether to normalize the data before processing. Normalization can improve the accuracy of bias correction by ensuring that the data is on a comparable scale. The default value is `TRUE`. Users may disable normalization if the data is already preprocessed.
+
+Next, the BCSD model is fitted to the training data:
+
+```{r, echo=TRUE, results = 'hide'}
+# Fit the BCSD model for the variables one by one
+bcsd_model_humidity <- bcsd(train_data_coarse[, , 1, ],
+  train_data_fine[, , 1, ],
+  n_quantiles = 100
+)
+bcsd_model_temp <- bcsd(train_data_coarse[, , 2, ],
+  train_data_fine[, , 2, ],
+  n_quantiles = 100
+)
+bcsd_model_precipitation <- bcsd(train_data_coarse[, , 3, ],
+  train_data_fine[, , 3, ],
+  n_quantiles = 100
+)
+```
+
+## Predicting the Fine-Scale Data
+
+The `predict.bcsd` function is used to apply the trained BCSD model to the coarse test data:
+
+```{r, echo=TRUE, results = 'hide'}
+predictions_humidity <- predict(bcsd_model_humidity, test_data_coarse[, , 1, ])
+predictions_temp <- predict(bcsd_model_temp, test_data_coarse[, , 2, ])
+predictions_precipitation <- predict(
+  bcsd_model_precipitation,
+  test_data_coarse[, , 3, ]
+)
+bcsd_preds_all <- abind(predictions_humidity, predictions_temp,
+  predictions_precipitation,
+  along = 4
+)
+# Reorder dimensions to match original data
+bcsd_preds_all <- aperm(bcsd_preds_all, c(1, 2, 4, 3))
+```
+
+## Visualizing BCSD Results
+
+The coarse input data, the BCSD predictions, and the true fine-scale data can be visualized to evaluate how well the BCSD method performs:
+
+```{r, echo=TRUE, out.width="100%", fig.width=18, fig.height=6}
+# Compare BCSD predictions with coarse input and true fine data for each variable
+compare_methods(test_data_coarse, bcsd_preds_all, test_data_fine,
+  var_idx = 1, time_idx = 1,
+  title = "Relative Humidity (%)", var_range = c(20, 100),
+  method_name = "BCSD"
+)
+
+compare_methods(test_data_coarse, bcsd_preds_all, test_data_fine,
+  var_idx = 2, time_idx = 1,
+  title = "Temperature (°C)", var_range = c(-10, 30),
+  method_name = "BCSD"
+)
+
+compare_methods(test_data_coarse, bcsd_preds_all, test_data_fine,
+  var_idx = 3, time_idx = 1,
+  title = "Total Precipitation (mm)", var_range = c(0, 0.1),
+  method_name = "BCSD"
+)
+```
+
+The results show that already the simple statistical downscaling method, BCSD, is able to produce 
+reasonable predictions of the fine-scale data.
+
+## Evaluating BCSD Performance
+
+The performance metrics are calculatedto evaluate the BCSD model's predictions against the true fine-scale data.
+
+```{r, echo=TRUE}
+# Calculate metrics for BCSD
+bcsd_metrics_humidity <- calculate_metrics(
+  bcsd_preds_all[, , 1, ],
+  test_data_fine[, , 1, ]
+)
+bcsd_metrics_temp <- calculate_metrics(
+  bcsd_preds_all[, , 2, ],
+  test_data_fine[, , 2, ]
+)
+bcsd_metrics_precipitation <- calculate_metrics(
+  bcsd_preds_all[, , 3, ],
+  test_data_fine[, , 3, ]
+)
+
+# Create and display metrics table
+bcsd_metrics_df <- data.frame(
+  Variable = c("Humidity", "Temperature", "Precipitation"),
+  MAE = c(
+    bcsd_metrics_humidity$MAE, bcsd_metrics_temp$MAE,
+    bcsd_metrics_precipitation$MAE
+  ),
+  RMSE = c(
+    bcsd_metrics_humidity$RMSE, bcsd_metrics_temp$RMSE,
+    bcsd_metrics_precipitation$RMSE
+  ),
+  KGE = c(
+    bcsd_metrics_humidity$KGE, bcsd_metrics_temp$KGE,
+    bcsd_metrics_precipitation$KGE
+  )
+)
+
+knitr::kable(bcsd_metrics_df,
+  caption = "Performance Metrics for BCSD Downscaling"
+)
+```
+
+## Method 2: Super Resolution Convolutional Residual Network (SRDRN)
+
+The SRDRN [@wang2021deep] model is a state-of-the-art deep learning based method for spatial downscaling.
+It is based on the concept of super-resolution convolutional neural networks (SRCNN) [@dong2015image], which is enhanced with residual learning to improve performance.
+The SRDRN architecture consists of the following key components:
+
+1. **Low-Resolution Feature Extraction Block**: The first block of the model extracts features from the low-resolution input data. 
+   This block uses convolutional layers to learn intial spatial patterns and relationships in the low-resolution input data.
+
+2. **Residual Blocks**: These blocks are designed to learn the residual mapping between input and output of the block. 
+   Residual learning helps to mitigate the vanishing gradient problem and allows the model to learn more complex mappings. 
+   Each residual block consists of several convolutional layers, batch normalization, and activation functions (typically ReLU).
+   The residual blocks are stacked to form a deep network that can learn intricate spatial relationships in the data.
+
+3. **Upscaling Block**: This block is responsible for upscaling the low-resolution features to the desired high-resolution output. 
+   It uses upscaling layers combined with convolutional layers to increase the spatial dimensions of the feature maps.
+
+The `SRDRN` function is used to create and train the SRDRN model.
+
+## Key parameters
+
+The `SRDRN` function has several key parameters that can be adjusted:
+
+- **`input_data`**: A 3D array representing the coarse input data with dimensions (N_1, N_1, n), where N_1 is the spatial resolution and n is the number of variables.
+
+- **`target_data`**: A 3D array representing the fine-scale target data with dimensions (N_2, N_2, n), where N_2 is the desired high resolution.
+
+- **`low_res_filters`**: A numeric vector specifying the number of filters for each convolutional layer in the low-resolution feature extraction block. This allows users to control the complexity of the model.
+
+- **`low_res_kernel_sizes`**: A list of numeric vectors specifying the kernel sizes for each convolutional layer in the low-resolution feature extraction block. This allows users to customize the receptive field of the convolutional layers.
+
+- **`high_res_filters`**: An integer specifying the number of filters in the transposed convolutional layer used for upscaling. This parameter controls the number of output channels in the final high-resolution output.
+
+- **`high_res_kernel_sizes`**: A numeric vector specifying the kernel size for the transposed convolutional layer. This parameter determines the spatial extent of the upscaling operation.
+
+- **`activation`**: A character string specifying the activation function to use in the convolutional layers. The default is "relu".
+
+- **`output_channels`**: An integer specifying the number of output channels in the final output. The number of output channels refers to number of variables predicted.
+
+The training data is passed to the model for training, and the `predict` function is used to apply the trained model to the test data to produce fine-scale predictions.
+
+Next, the SRDRN model is fitted to the training data:
+
+```{r, echo=TRUE, results = 'hide'}
+# Fit the SRDRN model for the variables one by one
+srdrn_model_humidity <- srdrn(train_data_coarse[, , 1, ],
+  train_data_fine[, , 1, ],
+  use_batch_norm = FALSE,
+  epochs = 50, batch_size = 32,
+  seed = 123
+)
+srdrn_model_temp <- srdrn(train_data_coarse[, , 2, ], train_data_fine[, , 2, ],
+  use_batch_norm = FALSE, epochs = 50, batch_size = 32,
+  seed = 123
+)
+srdrn_model_precipitation <- srdrn(train_data_coarse[, , 3, ],
+  train_data_fine[, , 3, ],
+  use_batch_norm = FALSE,
+  epochs = 50, batch_size = 32,
+  seed = 123
+)
+```
+## Predict the Fine-Scale Data
+
+The `predict.srdrn` function is used to apply the trained SRDRN model to the coarse test data:
+```{r, echo=TRUE}
+predictions_humidity <- predict(srdrn_model_humidity, 
+                                test_data_coarse[, , 1, ], 
+                                time_points = test_times)
+predictions_temp <- predict(srdrn_model_temp, 
+                            test_data_coarse[, , 2, ], 
+                            time_points = test_times)
+predictions_precipitation <- predict(
+  srdrn_model_precipitation,
+  test_data_coarse[, , 3, ], time_points = test_times
+)
+# Set negative precipitation to zero:
+predictions_precipitation[which(predictions_precipitation < 0)] <- 0
+srdrn_preds_all <- abind(predictions_humidity, predictions_temp,
+  predictions_precipitation,
+  along = 4
+)
+# Reorder dimensions to match original data:
+srdrn_preds_all <- aperm(srdrn_preds_all, c(1, 2, 4, 3))
+```
+
+## Visualizing SRDRN Results
+
+The SRDRN downscaling results are examined for each variable:
+
+```{r, echo=TRUE, out.width="100%", fig.width=18, fig.height=6}
+# Compare SRDRN predictions with coarse input and true fine data for each variable
+compare_methods(test_data_coarse, srdrn_preds_all, test_data_fine,
+  var_idx = 1, time_idx = 1,
+  title = "Relative Humidity (%)", var_range = c(15, 100),
+  method_name = "SRDRN"
+)
+
+compare_methods(test_data_coarse, srdrn_preds_all, test_data_fine,
+  var_idx = 2, time_idx = 1,
+  title = "Temperature (°C)", var_range = c(-10, 30),
+  method_name = "SRDRN"
+)
+
+compare_methods(test_data_coarse, srdrn_preds_all, test_data_fine,
+  var_idx = 3, time_idx = 1,
+  title = "Total Precipitation (mm)", var_range = c(0, 0.1),
+  method_name = "SRDRN"
+)
+```
+
+## Evaluating SRDRN Performance
+
+The same metrics as we did for BCSD are calculated:
+
+```{r, echo=TRUE}
+# Calculate metrics for SRDRN
+srdrn_metrics_humidity <- calculate_metrics(
+  srdrn_preds_all[, , 1, ],
+  test_data_fine[, , 1, ]
+)
+srdrn_metrics_temp <- calculate_metrics(
+  srdrn_preds_all[, , 2, ],
+  test_data_fine[, , 2, ]
+)
+srdrn_metrics_precipitation <- calculate_metrics(
+  srdrn_preds_all[, , 3, ],
+  test_data_fine[, , 3, ]
+)
+
+# Create and display metrics table
+srdrn_metrics_df <- data.frame(
+  Variable = c("Humidity", "Temperature", "Precipitation"),
+  MAE = c(
+    srdrn_metrics_humidity$MAE, srdrn_metrics_temp$MAE,
+    srdrn_metrics_precipitation$MAE
+  ),
+  RMSE = c(
+    srdrn_metrics_humidity$RMSE, srdrn_metrics_temp$RMSE,
+    srdrn_metrics_precipitation$RMSE
+  ),
+  KGE = c(
+    srdrn_metrics_humidity$KGE, srdrn_metrics_temp$KGE,
+    srdrn_metrics_precipitation$KGE
+  )
+)
+
+knitr::kable(srdrn_metrics_df,
+  caption = "Performance Metrics for SRDRN Downscaling"
+)
+```
+
+The performance metrics indicate that the SRDRN model has improved upon the BCSD method for all three variables.
+
+## Method 3: Time-aware SRDRN
+
+In time-aware SRDRN extension, the model incorporates temporal information through a temporal module, which encodes the time point of the observation using sinusoidal or radial basis function (RBF) encoding.
+The temporal module is constructed of the positional encoding layer and multiple feed forward layers.
+The learned temporal features are concatenated with the spatial features extracted from the low-resolution input data before passing them to the upscaling blocks.
+
+
+Time-aware SRDRN uses the same function to fit the model as SRDRN. The following parameters can be used to control the temporal module:
+
+- **`time_points`**: A vector representing the time points associated with each sample. This is used to incorporate temporal information into the model.
+
+- **`cyclical_period`**: A numeric value representing the cyclical period for time encoding (e.g. 365 for yearly seasonality).
+
+- **`temporal_basis`**: A numeric vector specifying the temporal basis functions to use for time encoding (default is c(9, 17, 37)).
+The temporal basis determines the resolution levels on which the radial basis functions are formed. Smaller values form large scale basis functions while
+large values create fine scale basis functions.
+
+- **`temporal_layers`**: A numeric vector specifying the number of units in each dense layer for time encoding (default is c(128, 256)).
+
+- **`cos_sin_time`**: A logical value indicating whether to use cosine and sine functions for time encoding (default is FALSE). If TRUE,
+the methods will use sinusoidal temporal encoding instead of the radial basis functions.
+
+The spatial downscaling is next replicated by using time-aware variant of SRDRN. For temporal encoding, the RBF positional encoding with resolution levels `c(2, 9)` are used, 
+meaning that two levels of radial basis functions are formed. In temporal module, the default values are used for the dense layers, i.e. 128 and 256 units.
+
+```{r, echo=TRUE, results='hide'}
+srdrn_model_humidity <- srdrn(train_data_coarse[, , 1, ],
+  train_data_fine[, , 1, ],
+  time_points = train_times,
+  temporal_basis = c(2, 9),
+  use_batch_norm = FALSE,
+  epochs = 50, batch_size = 32,
+  seed = 123
+)
+srdrn_model_temp <- srdrn(train_data_coarse[, , 2, ], train_data_fine[, , 2, ],
+  time_points = train_times,
+  temporal_basis = c(2, 9),
+  use_batch_norm = FALSE, epochs = 50, batch_size = 32,
+  seed = 123
+)
+srdrn_model_precipitation <- srdrn(train_data_coarse[, , 3, ],
+  train_data_fine[, , 3, ],
+  time_points = train_times,
+  temporal_basis = c(2, 9),
+  use_batch_norm = FALSE,
+  epochs = 50, batch_size = 32,
+  seed = 123
+)
+
+predictions_humidity <- predict(srdrn_model_humidity, 
+                                test_data_coarse[, , 1, ], 
+                                time_points = test_times)
+predictions_temp <- predict(srdrn_model_temp, 
+                            test_data_coarse[, , 2, ], 
+                            time_points = test_times)
+predictions_precipitation <- predict(
+  srdrn_model_precipitation,
+  test_data_coarse[, , 3, ], time_points = test_times
+)
+# Set negative precipitation to zero:
+predictions_precipitation[which(predictions_precipitation < 0)] <- 0
+tsrdrn_preds_all <- abind(predictions_humidity, predictions_temp,
+  predictions_precipitation,
+  along = 4
+)
+# Reorder dimensions to match original data:
+tsrdrn_preds_all <- aperm(tsrdrn_preds_all, c(1, 2, 4, 3))
+```
+
+```{r, echo=TRUE, out.width="100%", fig.width=18, fig.height=6}
+# Compare SRDRN predictions with coarse input and true fine data for each variable
+compare_methods(test_data_coarse, tsrdrn_preds_all, test_data_fine,
+  var_idx = 1, time_idx = 1,
+  title = "Relative Humidity (%)", var_range = c(15, 100),
+  method_name = "SRDRN"
+)
+
+compare_methods(test_data_coarse, tsrdrn_preds_all, test_data_fine,
+  var_idx = 2, time_idx = 1,
+  title = "Temperature (°C)", var_range = c(-10, 30),
+  method_name = "SRDRN"
+)
+
+compare_methods(test_data_coarse, tsrdrn_preds_all, test_data_fine,
+  var_idx = 3, time_idx = 1,
+  title = "Total Precipitation (mm)", var_range = c(0, 0.1),
+  method_name = "SRDRN"
+)
+```
+
+```{r, echo=TRUE}
+# Calculate metrics for TSRDRN
+tsrdrn_metrics_humidity <- calculate_metrics(
+  tsrdrn_preds_all[, , 1, ],
+  test_data_fine[, , 1, ]
+)
+tsrdrn_metrics_temp <- calculate_metrics(
+  tsrdrn_preds_all[, , 2, ],
+  test_data_fine[, , 2, ]
+)
+tsrdrn_metrics_precipitation <- calculate_metrics(
+  tsrdrn_preds_all[, , 3, ],
+  test_data_fine[, , 3, ]
+)
+
+# Create and display metrics table
+tsrdrn_metrics_df <- data.frame(
+  Variable = c("Humidity", "Temperature", "Precipitation"),
+  MAE = c(
+    tsrdrn_metrics_humidity$MAE, tsrdrn_metrics_temp$MAE,
+    tsrdrn_metrics_precipitation$MAE
+  ),
+  RMSE = c(
+    tsrdrn_metrics_humidity$RMSE, tsrdrn_metrics_temp$RMSE,
+    tsrdrn_metrics_precipitation$RMSE
+  ),
+  KGE = c(
+    tsrdrn_metrics_humidity$KGE, tsrdrn_metrics_temp$KGE,
+    tsrdrn_metrics_precipitation$KGE
+  )
+)
+
+knitr::kable(tsrdrn_metrics_df,
+  caption = "Performance Metrics for Time-Aware SRDRN Downscaling"
+)
+```
+
+The results show that by including temporal module, the time-aware SRDRN model has further improved the downscaling performance for all three variables.
+
+## Method 4: U-Net
+
+The U-Net [@ronneberger2015u] model is an advanced deep learning architecture originally for medical image segmentation.
+The model have been recently used extensively also for spatial downscaling, e.g. in [@sha2020deep]. The model is based on an
+encoder-decoder architecture with skip connections. It consists of several key components:
+
+1. **Initial Upscaling**: The coarse data is initially upscaled to match the spatial dimensions of the fine data using bilinear upscaling.
+
+2. **Initial Feature Extraction**: The upscaled data is passed through a series of convolutional layers that extract features from the input data.
+  In initial convolutional layers, downsampling is not performed, and the spatial dimensions of the input data are preserved.
+
+3. **Encoder Path**: The encoder path progressively reduces spatial dimensions while increasing the feature depth. It consists of repeated blocks of:
+   - Convolutional layers that extract features
+   - Activation functions (typically ReLU) to introduce nonlinearity
+   - Max pooling to reduce spatial dimensions
+
+4. **Decoder Path**: The decoder path gradually recovers spatial resolution while reducing feature depth. It consists of repeated blocks of:
+   - Bilinear upsampling to increase spatial dimensions
+   - Concatenation with corresponding encoder features via skip connections
+   - Convolutional layers to process the combined features
+   - Activation functions (typically ReLU) to introduce nonlinearity
+
+5. **Skip Connections**: These are direct connections that link layers in the encoder to corresponding layers in the decoder. Skip connections allow the model to:
+   - Preserve fine spatial details that might be lost during downsampling
+   - Mitigate the vanishing gradient problem during training
+   - Enable more effective feature reuse across the network
+
+6. **Final Output Layer**: The final output layer is a convolutional layer that maps the features to the desired number of output channels (e.g., 1 for single-variable predictions).
+
+The `unet_downscale` function in the `ECoST` package implements this architecture, allowing the user to modify various hyperparameters such as the number of filters, kernel sizes, dropout rates, and activation functions.
+
+### Key Parameters
+
+- **`coarse_data` and `fine_data`**: Input arrays in format [x, y, variables, time] representing the coarse and fine resolution data.
+
+- **`initial_filters`**: A vector specifying the number of layers and filters in initial convolutional layers. 
+Default is `c(16)`, meaning that one layer with 16 filters will be used.
+
+- **`initial_kernel_sizes`**: A list of vectors specifying the kernel sizes for each initial convolutional layer. 
+The length of the list should match the number of layers specified by `initial_filters`.
+
+- **`filters`**: A vector specifying the number of filters at each level of the encoder path. 
+Default is `c(32, 64, 128)`, meaning that 32 filters will be used in the first level, 64 in the second, and 128 in the third.
+The decoder path is constructred in reverse order.
+
+- **`kernel_sizes`**: A list of vectors specifying the kernel sizes for each level of the encoder/decoder path.
+
+- **`use_batch_norm`**: Whether to use batch normalization after each convolutional layer. Default is `TRUE`.
+
+- **`dropout_rate`**: Rate for the dropout regularization after the encoder path. Default is `0.2`.
+
+- **`activation`**: Activation function for hidden layers. Default is `"relu"`.
+
+- **`final_activation`**: Activation function for the output layer. Default is `"linear"`.
+
+- **`optimizer`** and **`learning_rate`**: Control the optimization process. Default is `"adam"` with learning rate `0.001`.
+
+- **`loss`** and **`metrics`**: Define the loss function and evaluation metrics. Defaults are `"mse"` (mean squared error) and `"mae"` (mean absolute error).
+
+- **`batch_size`** and **`epochs`**: Control the training process. Defaults are `32` and `100`, respectively.
+
+- **`validation_split`**: Fraction of data to use for validation. Default is `0.2`.
+
+- **`normalize`**: Whether to normalize data before training. Default is `TRUE`.
+
+Next, the U-Net model is applied to the downscaling task by using the default parameters for encoder and decoder paths,
+meaning that three levels with 32, 64, and 128 filters are used in the encoder/decoder paths.
+
+```{r, echo=TRUE, results='hide'}
+# Fit the U-Net model for the variables one by one
+unet_model_humidity <- unet_downscale(
+  train_data_coarse[, , 1, , drop = FALSE],
+  train_data_fine[, , 1, , drop = FALSE],
+  dropout_rate = 0,
+  batch_size = 32,
+  use_batch_norm = FALSE,
+  validation_split = 0,
+  learning_rate = 0.001,
+  epochs = 100,
+  verbose = 1,
+  seed = 123
+)
+
+unet_model_temp <- unet_downscale(
+  train_data_coarse[, , 2, , drop = FALSE],
+  train_data_fine[, , 2, , drop = FALSE],
+  dropout_rate = 0,
+  batch_size = 32,
+  use_batch_norm = FALSE,
+  validation_split = 0,
+  learning_rate = 0.001,
+  epochs = 100,
+  verbose = 1,
+  seed = 123
+)
+
+unet_model_precip <- unet_downscale(
+  train_data_coarse[, , 3, ], train_data_fine[, , 3, ],
+  dropout_rate = 0,
+  batch_size = 32,
+  use_batch_norm = FALSE,
+  validation_split = 0,
+  learning_rate = 0.001,
+  epochs = 100,
+  verbose = 1,
+  seed = 123
+)
+```
+
+## Predict the Fine-Scale Data
+
+The trained U-Net models can now be used for predicting fine-resolution data from the coarse test data:
+
+```{r, echo=TRUE}
+# Make predictions using the trained models
+predictions_humidity <- predict(
+  unet_model_humidity,
+  test_data_coarse[, , 1, ],
+  time_points = test_times
+)
+predictions_temp <- predict(
+  unet_model_temp,
+  test_data_coarse[, , 2, ],
+  time_points = test_times
+)
+predictions_precipitation <- predict(
+  unet_model_precip,
+  test_data_coarse[, , 3, ],
+  time_points = test_times
+)
+
+unet_preds_all <- abind(predictions_humidity, predictions_temp,
+  predictions_precipitation,
+  along = 4
+)
+unet_preds_all <- aperm(unet_preds_all, c(1, 2, 4, 3))
+```
+
+## Visualize the Results
+
+The coarse input data, the U-Net predictions, and the true fine-scale data are visualized to evaluate how well the U-Net model performs:
+
+```{r, echo=TRUE, out.width="100%", fig.width=18, fig.height=6}
+compare_methods(test_data_coarse, unet_preds_all, test_data_fine,
+  var_idx = 1, time_idx = 1,
+  title = "Relative Humidity (%)", var_range = c(20, 100),
+  method_name = "U-Net"
+)
+
+compare_methods(test_data_coarse, unet_preds_all, test_data_fine,
+  var_idx = 2, time_idx = 1,
+  title = "Temperature (°C)", var_range = c(-10, 30),
+  method_name = "U-Net"
+)
+
+compare_methods(test_data_coarse, unet_preds_all, test_data_fine,
+  var_idx = 3, time_idx = 1,
+  title = "Total Precipitation (mm)", var_range = c(-0.001, 0.1),
+  method_name = "U-Net"
+)
+```
+
+## Evaluate Model Performance
+
+To quantitatively assess how well the U-Net model performs, the error metrics are calculated by comparing the predictions to the true fine-scale data:
+
+```{r, echo=TRUE}
+# Calculate metrics for each variable
+metrics_humidity <- calculate_metrics(
+  unet_preds_all[, , 1, ],
+  test_data_fine[, , 1, ]
+)
+metrics_temp <- calculate_metrics(
+  unet_preds_all[, , 2, ],
+  test_data_fine[, , 2, ]
+)
+metrics_precip <- calculate_metrics(
+  unet_preds_all[, , 3, ],
+  test_data_fine[, , 3, ]
+)
+
+# Combine metrics into a data frame
+metrics_df <- data.frame(
+  Variable = c("Humidity", "Temperature", "Precipitation"),
+  MAE = c(metrics_humidity$MAE, metrics_temp$MAE, metrics_precip$MAE),
+  RMSE = c(metrics_humidity$RMSE, metrics_temp$RMSE, metrics_precip$RMSE),
+  KGE = c(metrics_humidity$KGE, metrics_temp$KGE, metrics_precip$KGE)
+)
+
+# Display the metrics
+knitr::kable(metrics_df, caption = "Performance Metrics for U-Net Downscaling")
+```
+
+Based on the results, U-Net has slightly worse performance than the baseline SRDRN.
+
+## Method 5: Time-aware U-Net
+
+The time-aware U-Net includes similar temporal module as the time-aware SRDRN model.
+The temporal features are concatenated with the spatial features extracted by the encoder path before passing them to the decoder path.
+The same parameters as for the time-aware SRDRN can be used to control the temporal module.
+
+Next, the analysis is replicated for the time-aware U-Net model using the same temporal parameters as for time-aware SRDRN.
+
+```{r, echo=TRUE, results='hide'}
+unet_model_humidity <- unet_downscale(
+  train_data_coarse[, , 1, , drop = FALSE],
+  train_data_fine[, , 1, , drop = FALSE],
+  time_points = train_times,
+  temporal_basis = c(2, 9),
+  dropout_rate = 0,
+  batch_size = 32,
+  use_batch_norm = FALSE,
+  validation_split = 0,
+  learning_rate = 0.001,
+  epochs = 100,
+  verbose = 1,
+  seed = 123
+)
+
+unet_model_temp <- unet_downscale(
+  train_data_coarse[, , 2, , drop = FALSE],
+  train_data_fine[, , 2, , drop = FALSE],
+  time_points = train_times,
+  temporal_basis = c(2, 9),
+  dropout_rate = 0,
+  batch_size = 32,
+  use_batch_norm = FALSE,
+  validation_split = 0,
+  learning_rate = 0.001,
+  epochs = 100,
+  verbose = 1,
+  seed = 123
+)
+
+unet_model_precip <- unet_downscale(
+  train_data_coarse[, , 3, ], train_data_fine[, , 3, ],
+  time_points = train_times,
+  temporal_basis = c(2, 9),
+  dropout_rate = 0,
+  batch_size = 32,
+  use_batch_norm = FALSE,
+  validation_split = 0,
+  learning_rate = 0.001,
+  epochs = 100,
+  verbose = 1,
+  seed = 123
+)
+```
+
+```{r, echo=TRUE}
+# Make predictions using the trained models
+predictions_humidity <- predict(
+  unet_model_humidity,
+  test_data_coarse[, , 1, ],
+  time_points = test_times
+)
+predictions_temp <- predict(
+  unet_model_temp,
+  test_data_coarse[, , 2, ],
+  time_points = test_times
+)
+predictions_precipitation <- predict(
+  unet_model_precip,
+  test_data_coarse[, , 3, ],
+  time_points = test_times
+)
+
+tunet_preds_all <- abind(predictions_humidity, predictions_temp,
+  predictions_precipitation,
+  along = 4
+)
+tunet_preds_all <- aperm(tunet_preds_all, c(1, 2, 4, 3))
+```
+
+```{r, echo=TRUE, out.width="100%", fig.width=18, fig.height=6}
+compare_methods(test_data_coarse, tunet_preds_all, test_data_fine,
+  var_idx = 1, time_idx = 1,
+  title = "Relative Humidity (%)", var_range = c(20, 100),
+  method_name = "Time-Aware U-Net"
+)
+
+compare_methods(test_data_coarse, tunet_preds_all, test_data_fine,
+  var_idx = 2, time_idx = 1,
+  title = "Temperature (°C)", var_range = c(-10, 30),
+  method_name = "Time-Aware U-Net"
+)
+
+compare_methods(test_data_coarse, tunet_preds_all, test_data_fine,
+  var_idx = 3, time_idx = 1,
+  title = "Total Precipitation (mm)", var_range = c(-0.001, 0.1),
+  method_name = "Time-Aware U-Net"
+)
+```
+
+```{r, echo=TRUE}
+# Calculate metrics for each variable
+metrics_humidity <- calculate_metrics(
+  tunet_preds_all[, , 1, ],
+  test_data_fine[, , 1, ]
+)
+metrics_temp <- calculate_metrics(
+  tunet_preds_all[, , 2, ],
+  test_data_fine[, , 2, ]
+)
+metrics_precip <- calculate_metrics(
+  tunet_preds_all[, , 3, ],
+  test_data_fine[, , 3, ]
+)
+
+# Combine metrics into a data frame
+metrics_df <- data.frame(
+  Variable = c("Humidity", "Temperature", "Precipitation"),
+  MAE = c(metrics_humidity$MAE, metrics_temp$MAE, metrics_precip$MAE),
+  RMSE = c(metrics_humidity$RMSE, metrics_temp$RMSE, metrics_precip$RMSE),
+  KGE = c(metrics_humidity$KGE, metrics_temp$KGE, metrics_precip$KGE)
+)
+
+# Display the metrics
+knitr::kable(metrics_df, caption = "Performance Metrics for Time-Aware U-Net Downscaling")
+```
+
+Based on the results, the time-aware U-Net model has improved the downscaling performance for all three variables compared to the standard U-Net model. However, it is still outperformed by the time-aware SRDRN.
+
+## Comparing the Methods
+
+Finally, the performances of all five methods (BCSD, SRDRN, Time-Aware SRDRN, U-Net, and Time-Aware U-Net) are compared using the calculated metrics.
+
+```{r, echo=TRUE}
+# Compare metrics across methods
+metrics_comparison <- compare_metrics(
+  bcsd_preds = bcsd_preds_all,
+  srdrn_preds = srdrn_preds_all,
+  tsrdrn_preds = tsrdrn_preds_all,
+  unet_preds = unet_preds_all,
+  tunet_preds = tunet_preds_all,
+  true_data = test_data_fine
+)
+# Display the metrics comparison
+knitr::kable(metrics_comparison$MAE,
+  caption = "Mean Absolute Error (MAE) Comparison"
+)
+knitr::kable(metrics_comparison$RMSE,
+  caption = "Root Mean Squared Error (RMSE) Comparison"
+)
+knitr::kable(metrics_comparison$KGE,
+  caption = "Kling-Gupta Efficiency (KGE) Comparison"
+)
+```
+
+Based on the metrics, all deep learning variants outperform BCSD in terms of MAE, RMSE and KGE metrics.
+The time-aware variants outperform their baseline counterparts, time-aware SRDRN being the best performing method.
+
+## Conclusion
+
+In this analysis, we explored five different methods for spatial downscaling of climate data:
+
+1. **Bias Correction and Spatial Disaggregation (BCSD)**: A statistical method that adjusts coarse-scale data to match the distribution of fine-scale data.
+
+2. **Super Resolution Deep Residual Network (SRDRN)**: A deep learning-based method that uses convolutional neural networks to learn complex spatial relationships.
+
+3. **Time-Aware SRDRN**: An extension of SRDRN that incorporates temporal information through a temporal encoding module.
+
+4. **U-Net**: An advanced deep learning architecture that combines encoder-decoder structure with skip connections to preserve spatial details.
+
+5. **Time-Aware U-Net**: An extension of U-Net that incorporates temporal information through a temporal encoding module.
+
+We compared the performance of these methods using a dataset of climate variables (humidity, temperature, and precipitation) over Italy.
+The results showed that all U-Net and SRDRN variants significantly outperformed BCSD in terms of various performance metrics, including MAE, RMSE and KGE.
+The time-aware variants of both models further improved the performance, with time-aware SRDRN being the best performing method overall.
+
+## Discussion
+
+Even though that the deep learning based methods, U-Net and SRDRN, outperformed BCSD in this case, it is important to note that 
+the deep learning require much more computational resources and time to train the models. In addition, with deep learning methods, 
+careful validation and hyperparameter tuning are necessary to avoid overfitting and ensure generalization to unseen data.
+This notebook did not include hyperparameter tuning and validation, but it is recommended to perform these steps in practice 
+to obtain the best results. 
+
+## References

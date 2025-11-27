@@ -1,0 +1,24 @@
+Package: SpatialDownscaling
+Type: Package
+Title: Methods for Spatial Downscaling Using Deep Learning
+Version: 0.1.0
+Date: 2025-03-27
+Authors@R: c(person(given = "Mika", family = "Sipilä", role = c("aut", "cre"), email = "mika.e.sipila@jyu.fi", comment=c(ORCID = "0000-0002-5912-840X")))
+Imports: stats, tensorflow, keras3, magrittr
+Suggests: 
+    knitr,
+    rmarkdown,
+    spacetime,
+    ggplot2,
+    reshape2,
+    abind
+Description: The package contains various statistical and deep learning based methods for spatial downscaling.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+RdMacros: Rdpack, mathjaxr
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: 
+    R (>= 2.10)
+VignetteBuilder: knitr
