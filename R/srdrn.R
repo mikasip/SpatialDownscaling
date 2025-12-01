@@ -364,6 +364,7 @@ srdrn <- function(input_data, target_data, time_points = NULL,
 #' 
 #' @param object A trained SRDRN object.
 #' @param newdata A 3D array of shape (N_1, N_1, n) representing the new data to be predicted.
+#' @param ... Additional parameters (not used).
 #' 
 #' @return A 3D array of shape (N_2, N_2, n) representing the predicted data.
 #' 
@@ -400,9 +401,11 @@ srdrn <- function(input_data, target_data, time_points = NULL,
 #'                      dim = c(16, 16, n_new))
 #' predictions <- predict(model, newdata, 1:n_new)
 #' }
+#' 
+#' @seealso \code{\link{srdrn}} for fitting SRDRN model.
 #'
 #' @export
-predict.srdrn <- function(object, newdata, time_points = NULL) {
+predict.srdrn <- function(object, newdata, time_points = NULL, ...) {
     if (is.null(object$model)) {
         stop("The model has not been trained yet.")
     }

@@ -30,8 +30,6 @@ bcsd(
 \item{extrapolate}{Logical. Whether to extrapolate corrections outside calibration range. Default: TRUE.}
 
 \item{normalize}{Logical. Whether to normalize data before processing. Default: TRUE.}
-
-\item{verbose}{Logical. Whether to print progress information. Default: TRUE.}
 }
 \value{
 A list containing the trained model components:

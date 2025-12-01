@@ -1,14 +1,3 @@
-#' Evaluate downscaling model
-#'
-#' @param model The downscaling model (either BCSD or UNet)
-#' @param test_input Array. Test input data.
-#' @param test_target Array. Test target data.
-#' @param metrics Character vector. Metrics to compute. Default: c("rmse", "mae", "correlation")
-#' @param plot Logical. Whether to plot example predictions. Default: TRUE.
-#'
-#' @return List of evaluation metrics and potentially plots
-#'
-#' @export
 evaluate_downscaling <- function(model, test_input, test_target,
                                  metrics = c("rmse", "mae", "correlation"),
                                  plot = TRUE) {

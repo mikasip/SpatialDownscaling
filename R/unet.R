@@ -102,7 +102,7 @@
 #' time_points <- 1:T
 #'
 #' # Fit a tiny UNet (very small filters to keep the example fast)
-#' model_obj <- unet_downscale(
+#' model_obj <- unet(
 #'   coarse_data,
 #'   fine_data,
 #'   time_points = time_points,
@@ -118,7 +118,7 @@
 #' \insertAllCited{}
 #' 
 #' @export
-unet_downscale <- function(coarse_data, fine_data,
+unet <- function(coarse_data, fine_data,
                           time_points = NULL,
                           val_coarse_data= NULL, 
                           val_fine_data = NULL, 
@@ -539,7 +539,7 @@ unet_downscale <- function(coarse_data, fine_data,
 #' time_points <- 1:T
 #'
 #' # Fit a tiny UNet (very small filters to keep the example fast)
-#' model_obj <- unet_downscale(
+#' model_obj <- unet(
 #'   coarse_data,
 #'   fine_data,
 #'   time_points = time_points,
@@ -555,6 +555,8 @@ unet_downscale <- function(coarse_data, fine_data,
 #'                      dim = c(nx_c, ny_c, 1, T_new))
 #' predictions <- predict(model_obj, newdata, 1:T_new)
 #' }
+#' 
+#' @seealso \code{\link{unet}} for fitting UNet model.
 #' 
 #' @export
 predict.UNet <- function(object, newdata, time_points = NULL) {

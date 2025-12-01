@@ -43,7 +43,7 @@ srdrn(
 
 \item{temporal_basis}{A numeric vector specifying the temporal basis functions to use for time encoding (default is c(9, 17, 37)).}
 
-\item{temporal_layers}{A numeric vector specifying the number of units in each dense layer for time encoding (default is c(128, 256)).}
+\item{temporal_layers}{A numeric vector specifying the number of units in each dense layer for time encoding (default is c(32, 64, 128)).}
 
 \item{activation}{A character string specifying the activation function to use (default is "relu").}
 

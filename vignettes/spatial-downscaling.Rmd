@@ -961,7 +961,7 @@ encoder-decoder architecture with skip connections. It consists of several key c
 
 6. **Final Output Layer**: The final output layer is a convolutional layer that maps the features to the desired number of output channels (e.g., 1 for single-variable predictions).
 
-The `unet_downscale` function in the `ECoST` package implements this architecture, allowing the user to modify various hyperparameters such as the number of filters, kernel sizes, dropout rates, and activation functions.
+The `unet` function in the `ECoST` package implements this architecture, allowing the user to modify various hyperparameters such as the number of filters, kernel sizes, dropout rates, and activation functions.
 
 ### Key Parameters
 
@@ -1002,7 +1002,7 @@ meaning that three levels with 32, 64, and 128 filters are used in the encoder/d
 
 ```{r, echo=TRUE, results='hide'}
 # Fit the U-Net model for the variables one by one
-unet_model_humidity <- unet_downscale(
+unet_model_humidity <- unet(
   train_data_coarse[, , 1, , drop = FALSE],
   train_data_fine[, , 1, , drop = FALSE],
   dropout_rate = 0,
@@ -1015,7 +1015,7 @@ unet_model_humidity <- unet_downscale(
   seed = 123
 )
 
-unet_model_temp <- unet_downscale(
+unet_model_temp <- unet(
   train_data_coarse[, , 2, , drop = FALSE],
   train_data_fine[, , 2, , drop = FALSE],
   dropout_rate = 0,
@@ -1028,7 +1028,7 @@ unet_model_temp <- unet_downscale(
   seed = 123
 )
 
-unet_model_precip <- unet_downscale(
+unet_model_precip <- unet(
   train_data_coarse[, , 3, ], train_data_fine[, , 3, ],
   dropout_rate = 0,
   batch_size = 32,
@@ -1136,7 +1136,7 @@ The same parameters as for the time-aware SRDRN can be used to control the tempo
 Next, the analysis is replicated for the time-aware U-Net model using the same temporal parameters as for time-aware SRDRN.
 
 ```{r, echo=TRUE, results='hide'}
-unet_model_humidity <- unet_downscale(
+unet_model_humidity <- unet(
   train_data_coarse[, , 1, , drop = FALSE],
   train_data_fine[, , 1, , drop = FALSE],
   time_points = train_times,
@@ -1151,7 +1151,7 @@ unet_model_humidity <- unet_downscale(
   seed = 123
 )
 
-unet_model_temp <- unet_downscale(
+unet_model_temp <- unet(
   train_data_coarse[, , 2, , drop = FALSE],
   train_data_fine[, , 2, , drop = FALSE],
   time_points = train_times,
@@ -1166,7 +1166,7 @@ unet_model_temp <- unet_downscale(
   seed = 123
 )
 
-unet_model_precip <- unet_downscale(
+unet_model_precip <- unet(
   train_data_coarse[, , 3, ], train_data_fine[, , 3, ],
   time_points = train_times,
   temporal_basis = c(2, 9),

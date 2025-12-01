@@ -4,12 +4,14 @@
 \alias{predict.srdrn}
 \title{Predict method for SRDRN}
 \usage{
-\method{predict}{srdrn}(object, newdata, time_points = NULL)
+\method{predict}{srdrn}(object, newdata, time_points = NULL, ...)
 }
 \arguments{
 \item{object}{A trained SRDRN object.}
 
 \item{newdata}{A 3D array of shape (N_1, N_1, n) representing the new data to be predicted.}
+
+\item{...}{Additional parameters (not used).}
 }
 \value{
 A 3D array of shape (N_2, N_2, n) representing the predicted data.
@@ -54,4 +56,7 @@ newdata <- array(runif(16 * 16 * n_new),
 predictions <- predict(model, newdata, 1:n_new)
 }
 
+}
+\seealso{
+\code{\link{srdrn}} for fitting SRDRN model.
 }

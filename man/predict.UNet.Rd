@@ -9,11 +9,9 @@
 \arguments{
 \item{object}{A UNet model object.}
 
-\item{new_data}{Array or list of arrays. New data to predict on in format \link{x, y, variables, time}.}
+\item{newdata}{Array or list of arrays. New data to predict on in format `\link{x, y, variables, time}``.}
 
-\item{denormalize}{Logical. Whether to denormalize predictions. Default: TRUE.}
-
-\item{verbose}{Integer. Verbosity mode (0, 1, or 2). Default: 1.}
+\item{time_points}{An optional numeric vector containing the time points of the new data.}
 
 \item{...}{Additional arguments (not used).}
 }
@@ -34,11 +32,11 @@ nx_c <- 8; ny_c <- 8
 nx_f <- 16; ny_f <- 16
 T <- 5  # number of time steps
 
-# Coarse data: [x, y, variables, time]
+# Coarse data:
 coarse_data <- array(runif(nx_c * ny_c * 1 * T),
                      dim = c(nx_c, ny_c, 1, T))
 
-# Fine data: higher-resolution target
+# Fine data:
 fine_data <- array(runif(nx_f * ny_f * 1 * T),
                    dim = c(nx_f, ny_f, 1, T))
 
@@ -46,7 +44,7 @@ fine_data <- array(runif(nx_f * ny_f * 1 * T),
 time_points <- 1:T
 
 # Fit a tiny UNet (very small filters to keep the example fast)
-model_obj <- unet_downscale(
+model_obj <- unet(
   coarse_data,
   fine_data,
   time_points = time_points,
@@ -63,4 +61,7 @@ newdata <- array(runif(nx_c * ny_c * 1 * T_new),
 predictions <- predict(model_obj, newdata, 1:T_new)
 }
 
+}
+\seealso{
+\code{\link{unet}} for fitting UNet model.
 }
