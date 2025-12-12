@@ -11,6 +11,8 @@
 
 \item{newdata}{A 3D array of shape (N_1, N_1, n) representing the new data to be predicted.}
 
+\item{time_points}{An optional vector of time points of the new data.}
+
 \item{...}{Additional parameters (not used).}
 }
 \value{
@@ -24,37 +26,36 @@ The predictions are then rescaled back to the original range.
 }
 \details{
 The predict method for the SRDRN class takes a trained SRDRN object and new data as input.
-It normalizes the new data using the same min-max scaling used during training.
+The input resolution (N_1 x N_1) has to match the input dimension of the training samples.
+The method normalizes the new data using the same min-max scaling used during training.
 The new data is reshaped to match the input shape of the model,
 and the model is used to make predictions.
-The predictions are then rescaled back to the original range using the min-max scaling parameters
-obtained during training.
+The output data has the same fine resolution (N_2 x N_2) as the target training data.
+The predictions are rescaled back to the original range using the min-max scaling parameters
+of the training data.
 The output is a 3D array of the predicted data.
 }
 \examples{
-\dontrun{
 # Generate dummy low-resolution (16×16) and high-resolution (32×32) data
-n <- 20
-input  <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
-target <- array(runif(32 * 32 * n),  dim = c(32, 32, n))
+n <- 10
+input  <- array(runif(8 * 8 * n),  dim = c(8, 8, n))
+target <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
 
-# Example 2: Spatio-temporal downscaling using time points
 time_vec <- 1:n
 model <- srdrn(
-  input_data  = input,
-  target_data = target,
+  coarse_data  = input,
+  fine_data = target,
   time_points = time_vec,
   cyclical_period = 365,
   temporal_layers = c(32, 64),
-  epochs = 2,
+  epochs = 1,
   batch_size = 4
 )
 
 n_new <- 3
-newdata <- array(runif(16 * 16 * n_new),
-                     dim = c(16, 16, n_new))
+newdata <- array(runif(8 * 8 * n_new),
+                     dim = c(8, 8, n_new))
 predictions <- predict(model, newdata, 1:n_new)
-}
 
 }
 \seealso{

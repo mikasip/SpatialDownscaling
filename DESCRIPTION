@@ -2,23 +2,26 @@ Package: SpatialDownscaling
 Type: Package
 Title: Methods for Spatial Downscaling Using Deep Learning
 Version: 0.1.0
-Date: 2025-03-27
-Authors@R: c(person(given = "Mika", family = "Sipilä", role = c("aut", "cre"), email = "mika.e.sipila@jyu.fi", comment=c(ORCID = "0000-0002-5912-840X")))
-Imports: stats, tensorflow, keras3, magrittr
+Date: 2025-12-03
+Authors@R: c(person(given = "Mika", family = "Sipilä", role = c("aut", "cre"), email = "mika.e.sipila@jyu.fi", comment=c(ORCID = "0000-0002-5912-840X")),
+             person(given = "Claudia", family = "Cappello", role = c("aut"), email = "claudia.cappello@unisalento.it", comment=c(ORCID = "0000-0002-7905-5068")),
+             person(given = "Sandra", family = "De Iaco", role = c("aut"), email = "sandra.deiaco@unisalento.it", comment=c(ORCID = "0000-0003-1820-2068")),
+             person(given = "Klaus", family = "Nordhausen", role = c("aut"), email = "klaus.nordhausen@helsinki.fi", comment=c(ORCID = "0000-0002-3758-8501")),
+             person(given = "Sara", family = "Taskinen", role = c("aut"), email = "sara.l.taskinen@jyu.fi", comment=c(ORCID = "0000-0001-9470-7258")))
+Imports: stats, tensorflow, keras3, magrittr, Rdpack, raster
 Suggests: 
     knitr,
     rmarkdown,
-    spacetime,
     ggplot2,
     reshape2,
     abind
-Description: The package contains various statistical and deep learning based methods for spatial downscaling.
+Description: The aim of the spatial downscaling is to increase the spatial resolution of the gridded geospatial input data. This package contains two deep learning based spatial downscaling methods, super-resolution deep residual network (SRDRN) (Wang et al., 2021 <https://doi.org/10.1029/2020WR029308>) and UNet (Ronneberger et al., 2015 <https://doi.org/10.1007/978-3-319-24574-4_28>), along with a statistical baseline method bias correction and spatial disaggregation (Wood et al., 2004 <https://doi.org/10.1023/B:CLIM.0000013685.99609.9e>). The SRDRN and UNet methods are implemented to optionally account for cyclical temporal patterns in case of spatio-temporal data. For more details of the methods, see Sipilä et al. (2025) <doi_to_arxiv>.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RdMacros: Rdpack, mathjaxr
+RdMacros: Rdpack
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Depends: 
-    R (>= 4.4.1)
+    R (>= 4.4.0)
 VignetteBuilder: knitr

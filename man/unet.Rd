@@ -16,6 +16,8 @@ unet(
   cos_sin_transform = FALSE,
   temporal_basis = c(9, 17, 37),
   temporal_layers = c(32, 64, 128),
+  temporal_cnn_filters = c(8, 16),
+  temporal_cnn_kernel_sizes = list(c(3, 3), c(3, 3)),
   initial_filters = c(16),
   initial_kernel_sizes = list(c(3, 3)),
   filters = c(32, 64, 128),
@@ -29,7 +31,8 @@ unet(
   loss = "mse",
   metrics = c(),
   batch_size = 32,
-  epochs = 100,
+  epochs = 10,
+  start_from_model = NULL,
   validation_split = 0.2,
   normalize = TRUE,
   callbacks = NULL,
@@ -38,19 +41,19 @@ unet(
 )
 }
 \arguments{
-\item{coarse_data}{3D or 4D array. The coarse resolution input data in format
-\verb{[x, y, variables, time]}, where the variables dimension is optional.}
+\item{coarse_data}{3D  array. The coarse resolution input data in format
+(x, y, time).}
 
-\item{fine_data}{3D or 4D array. The fine resolution target data in format
-\verb{[x, y, variables, time]}, where the variables dimension is optional.}
+\item{fine_data}{3D array. The fine resolution target data in format
+(x, y, time).}
 
 \item{time_points}{Numeric vector. Optional time points corresponding to each time step in the data.}
 
-\item{val_coarse_data}{An optional 3D or 4D array of coarse resolution input data in format
-\verb{[x, y, variables, time]}, where the variables dimension is optional.}
+\item{val_coarse_data}{An optional 3D array of coarse resolution input data in format
+(x, y, time).}
 
-\item{val_fine_data}{An optional 3D or 4D array of fine resolution target data in format
-\verb{[x, y, variables, time]}, where the variables dimension is optional.}
+\item{val_fine_data}{An optional 3D array of fine resolution target data in format
+(x, y, time).}
 
 \item{val_time_points}{An optional numeric vector of length n representing the time points of the validation samples.}
 
@@ -63,6 +66,10 @@ unet(
 \item{temporal_basis}{A numeric vector specifying the temporal basis functions to use for time encoding (default is c(9, 17, 37)).}
 
 \item{temporal_layers}{A numeric vector specifying the number of units in each dense layer for time encoding (default is c(32, 64, 128)).}
+
+\item{temporal_cnn_filters}{A numeric vector specifying the number of filters in each convolutional layer for temporal feature processing (default is c(8, 16)).}
+
+\item{temporal_cnn_kernel_sizes}{A list of integer vectors specifying the kernel sizes for each convolutional layer in the temporal feature processing (default is list(c(3, 3), c(3, 3))).}
 
 \item{initial_filters}{Integer vector. Number of filters in the initial convolutional layers. Default: c(16).}
 
@@ -91,6 +98,8 @@ unet(
 \item{batch_size}{Integer. Batch size for training. Default: 32.}
 
 \item{epochs}{Integer. Number of training epochs. Default: 100.}
+
+\item{start_from_model}{An optional pre-trained Keras model to continue training from (default is NULL).}
 
 \item{validation_split}{Numeric. Fraction of data to use for validation. Default: 0.2.}
 
@@ -145,8 +154,6 @@ The function supports missing data via masking, optional normalization,
 validation data, and configurable UNet depth and width.
 }
 \examples{
-\dontrun{
-library(keras3)
 
 # Create tiny dummy data:
 # Coarse grid: 8x8 → Fine grid: 16x16
@@ -155,12 +162,12 @@ nx_f <- 16; ny_f <- 16
 T <- 5  # number of time steps
 
 # Coarse data:
-coarse_data <- array(runif(nx_c * ny_c * 1 * T),
-                     dim = c(nx_c, ny_c, 1, T))
+coarse_data <- array(runif(nx_c * ny_c * T),
+                     dim = c(nx_c, ny_c, T))
 
 # Fine data:
-fine_data <- array(runif(nx_f * ny_f * 1 * T),
-                   dim = c(nx_f, ny_f, 1, T))
+fine_data <- array(runif(nx_f * ny_f * T),
+                   dim = c(nx_f, ny_f, T))
 
 # Optional time points
 time_points <- 1:T
@@ -176,7 +183,6 @@ model_obj <- unet(
   batch_size = 2,
   verbose = 0
 )
-}
 
 }
 \references{

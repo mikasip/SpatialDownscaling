@@ -33,12 +33,14 @@ bcsd(
 }
 \value{
 A list containing the trained model components:
-\item{quantile_map}{Quantile mapping function for bias correction}
-\item{scaler_coarse}{Scaler for coarse data normalization (if normalize=TRUE)}
-\item{scaler_fine}{Scaler for fine data normalization (if normalize=TRUE)}
-\item{interpolation_params}{Parameters for spatial interpolation}
-\item{axis_names}{Names of the axes in the fine data}
-\item{model_params}{List of all model parameters}
+\item{quantile_map}{Quantile mapping function for bias correction.}
+\item{interpolation_params}{Parameters for spatial interpolation.}
+\item{axis_names}{Names of the axes in the fine data.}
+\item{scalers}{List of scalers. If \code{normalize = TRUE},
+the list contains scalers \code{coarse} and \code{fine}
+for the coarse and fine data, respectively.
+If \code{normalize = FALSE}, the list is empty.}
+\item{model_params}{List of all model parameters.}
 }
 \description{
 Implements the BCSD method for statistical downscaling of climate data.
@@ -56,11 +58,10 @@ The interpolation step uses the specified method to create a fine resolution gri
 }
 \examples{
 # Simple example with random data
-\dontrun{
-coarse <- array(rnorm(10*20*30), dim = c(10, 20, 30))  # time x lat x lon
-fine <- array(rnorm(10*40*60), dim = c(10, 40, 60))    # time x lat x lon
+coarse <- array(rnorm(8 * 8 * 10), dim = c(8, 8, 10))  # e.g. lat x lon x time 
+fine <- array(rnorm(16 * 16 * 10), dim = c(16, 16, 10))    # e.g. lat x lon x time
 model <- bcsd(coarse, fine, method = "bilinear", n_quantiles = 100)
-predictions <- model$predict(coarse_new)
-}
+coarse_new <- array(rnorm(8 * 8 * 3), dim = c(8, 8, 3))  # e.g. lat x lon x time 
+predictions <- predict(model, coarse_new)
 
 }

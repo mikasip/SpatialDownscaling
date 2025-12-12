@@ -1,25 +1,31 @@
 #' Super Resolution CNN for Spatial Downscaling
 #' @importFrom magrittr %>%
+#' @importFrom Rdpack reprompt
 #' 
 #' @description
 #' This function implements a Time-aware Super Resolution Deep Neural Network (SRDRN)
-#' for spatial downscaling of grid based data using the TensorFlow and Keras libraries.
+#' for spatial downscaling of grid based data.
 #' The function allows an option for adding a temporal module for spatio-temporal applications.
 #'
-#' @param input_data A 3D array of shape (N_1, N_1, n) representing the input data. 
-#' @param target_data A 3D array of shape (N_2, N_2, n) representing the target data.
+#' @param coarse_data A 3D array of shape (N_1, N_1, n) representing the input data. 
+#' @param fine_data A 3D array of shape (N_2, N_2, n) representing the target data.
 #' @param time_points An optional numeric vector of length n representing the time points associated with each sample.
-#' @param val_input_data An optional 3D array of shape (N_1, N_1, n) representing the input validation data.
-#' @param val_target_data An optional 3D array of shape (N_2, N_2, n) representing the target validation data.
+#' @param val_coarse_data An optional 3D array of shape (N_1, N_1, n) representing the input validation data.
+#' @param val_fine_data An optional 3D array of shape (N_2, N_2, n) representing the target validation data.
 #' @param val_time_points An optional numeric vector of length n representing the time points of the validation samples.
 #' @param cyclical_period An optional numeric value representing the cyclical period for time encoding (e.g. 365 for yearly seasonality).
 #' @param temporal_basis A numeric vector specifying the temporal basis functions to use for time encoding (default is c(9, 17, 37)).
 #' @param temporal_layers A numeric vector specifying the number of units in each dense layer for time encoding (default is c(32, 64, 128)).
+#' @param temporal_cnn_filters A numeric vector specifying the number of filters in each convolutional layer for temporal feature processing (default is c(8, 16)).
+#' @param temporal_cnn_kernel_sizes A list of integer vectors specifying the kernel sizes for each convolutional layer in the temporal feature processing (default is list(c(3, 3), c(3, 3))).
 #' @param activation A character string specifying the activation function to use (default is "relu").
 #' @param cos_sin_time A logical value indicating whether to use cosine and sine transformations for time encoding (default is FALSE).
 #' @param use_batch_norm A logical value indicating whether to use batch normalization in the residual blocks (default is FALSE).
 #' @param output_channels An integer specifying the number of output channels (default is 1).
 #' @param num_residual_blocks An integer specifying the number of residual blocks in the model (default is 3).
+#' @param num_res_block_filters A integer specifying the number of filters in each residual block (default is 64).
+#' @param upscaling_filters A numeric vector specifying the number of filters in each upsampling layer 
+#' (by default, the first X values from vector c(64, 32, 16, 8, 4, 2) are selected, where X is the upscaling factor.).
 #' @param validation_split A numeric value between 0 and 1 specifying the fraction of the training data to use for validation (default is 0.2).
 #' @param start_from_model An optional pre-trained Keras model to continue training from (default is NULL).
 #' @param epochs An integer specifying the number of training epochs (default is 10).
@@ -78,55 +84,50 @@
 #' (e.g., seasonality, long-term trends).
 #'
 #' @examples
-#' \dontrun{
 #' # Generate dummy low-resolution (16×16) and high-resolution (32×32) data
 #' n <- 20
 #' input  <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
 #' target <- array(runif(32 * 32 * n),  dim = c(32, 32, n))
 #'
-#' # Example 1: Spatial downscaling (no time)
 #' model1 <- srdrn(
-#'   input_data  = input,
-#'   target_data = target,
-#'   epochs = 2,
+#'   coarse_data  = input,
+#'   fine_data = target,
+#'   epochs = 1,
 #'   batch_size = 4
 #' )
-#'
-#' # Example 2: Spatio-temporal downscaling using time points
-#' time_vec <- 1:n
-#' model2 <- srdrn(
-#'   input_data  = input,
-#'   target_data = target,
-#'   time_points = time_vec,
-#'   cyclical_period = 365,
-#'   temporal_layers = c(32, 64),
-#'   epochs = 2,
-#'   batch_size = 4
-#' )
-#' }
 #' 
 #' @references 
 #' \insertAllCited{}
 #' 
 #' @export
-srdrn <- function(input_data, target_data, time_points = NULL, 
-                    val_input_data = NULL, val_target_data = NULL, val_time_points = NULL, 
+srdrn <- function(coarse_data, fine_data, time_points = NULL, 
+                    val_coarse_data = NULL, val_fine_data = NULL, val_time_points = NULL, 
                     cyclical_period = NULL, temporal_basis = c(9, 17, 37), 
-                    temporal_layers = c(32, 64, 128), activation = "relu", cos_sin_time = FALSE,
+                    temporal_layers = c(32, 64, 128), temporal_cnn_filters = c(8, 16),
+                    temporal_cnn_kernel_sizes = list(c(3, 3), c(3, 3)),activation = "relu", 
+                    cos_sin_time = FALSE,
                     use_batch_norm = FALSE, output_channels = 1, num_residual_blocks = 3,
+                    num_res_block_filters = 64, upscaling_filters = c(64, 32, 16, 8, 4, 2),
                     validation_split = 0, start_from_model = NULL,
                     epochs = 10, batch_size = 32, seed = NULL) {
 
-    if (dim(input_data)[3] != dim(target_data)[3]) {
-        stop("The number of samples in 'input_data' and 'target_data' must be the same.")
+    if (dim(coarse_data)[3] != dim(fine_data)[3]) {
+        stop("The number of samples in 'coarse_data' and 'fine_data' must be the same.")
     }
-    axis_names <- dimnames(target_data)
-    input_data <- aperm(input_data, c(3, 1, 2))
-    input_width <- dim(input_data)[2]
-    input_height <- dim(input_data)[3]
-    target_data <- aperm(target_data, c(3, 1, 2))
-    if (length(dim(input_data)) == 4) {
-        output_channels <- dim(input_data)[4]
+    axis_names <- dimnames(fine_data)
+    if (is.null(axis_names)) {
+        axis_names <- list(
+            paste0("x", 1:dim(fine_data)[1]),
+            paste0("y", 1:dim(fine_data)[2]),
+            paste0("time", 1:dim(fine_data)[3])
+        )
+    }
+    coarse_data <- aperm(coarse_data, c(3, 1, 2))
+    input_width <- dim(coarse_data)[2]
+    input_height <- dim(coarse_data)[3]
+    fine_data <- aperm(fine_data, c(3, 1, 2))
+    if (length(dim(coarse_data)) == 4) {
+        output_channels <- dim(coarse_data)[4]
     } else {
         output_channels <- 1
     }
@@ -166,27 +167,36 @@ srdrn <- function(input_data, target_data, time_points = NULL,
         }
         t_branch <- t_branch %>% keras3::layer_dense(input_width * input_height, activation = activation) %>%
             keras3::layer_reshape(c(input_width, input_height, 1))
+        for (i in seq_along(temporal_cnn_filters)) {
+            t_branch <- t_branch %>%
+                keras3::layer_conv_2d(
+                    filters = temporal_cnn_filters[i],
+                    kernel_size = temporal_cnn_kernel_sizes[[i]],
+                    padding = "same",
+                    activation = activation
+                )
+        }
     } else {
         min_time_point <- NULL
         max_time_point <- NULL
     }
 
-    upscale_factor <- as.integer(dim(target_data)[2] / dim(input_data)[2])
+    upscale_factor <- as.integer(dim(fine_data)[2] / dim(coarse_data)[2])
     
     # Normalize input and target data
-    input_mean <- mean(input_data, na.rm = TRUE)
-    input_sd <- stats::sd(input_data, na.rm = TRUE)
-    input_data <- (input_data - input_mean) / input_sd
-    if (!is.null(val_input_data)) {
-        val_input_data <- aperm(val_input_data, c(3, 1, 2))
-        val_input_data <- (val_input_data - input_mean) / input_sd
+    input_mean <- mean(coarse_data, na.rm = TRUE)
+    input_sd <- stats::sd(coarse_data, na.rm = TRUE)
+    coarse_data <- (coarse_data - input_mean) / input_sd
+    if (!is.null(val_coarse_data)) {
+        val_coarse_data <- aperm(val_coarse_data, c(3, 1, 2))
+        val_coarse_data <- (val_coarse_data - input_mean) / input_sd
     }
-    target_mean <- mean(target_data, na.rm = TRUE)
-    target_sd <- stats::sd(target_data, na.rm = TRUE)
-    target_data <- (target_data - target_mean) / target_sd
-    if (!is.null(val_target_data)) {
-        val_target_data <- aperm(val_target_data, c(3, 1, 2))
-        val_target_data <- (val_target_data - target_mean) / target_sd
+    target_mean <- mean(fine_data, na.rm = TRUE)
+    target_sd <- stats::sd(fine_data, na.rm = TRUE)
+    fine_data <- (fine_data - target_mean) / target_sd
+    if (!is.null(val_fine_data)) {
+        val_fine_data <- aperm(val_fine_data, c(3, 1, 2))
+        val_fine_data <- (val_fine_data - target_mean) / target_sd
     }
     
     # Define residual block function
@@ -243,31 +253,31 @@ srdrn <- function(input_data, target_data, time_points = NULL,
     }
 
     # Expand dimensions to add channel axis (required for CNNs)
-    input_data <- keras3::array_reshape(input_data, c(dim(input_data), 1))
-    target_data <- keras3::array_reshape(target_data, c(dim(target_data), 1))
-    input_mask <- is.na(input_data)
-    input_data[input_mask] <- 0
-    target_mask <- is.na(target_data)
-    target_data[target_mask] <- 0
+    coarse_data <- keras3::array_reshape(coarse_data, c(dim(coarse_data), 1))
+    fine_data <- keras3::array_reshape(fine_data, c(dim(fine_data), 1))
+    input_mask <- is.na(coarse_data)
+    coarse_data[input_mask] <- 0
+    target_mask <- is.na(fine_data)
+    fine_data[target_mask] <- 0
 
     # Define the model
-    input_layer <- keras3::layer_input(c(dim(input_data)[2:3], 1))
+    input_layer <- keras3::layer_input(c(dim(coarse_data)[2:3], 1))
 
     # Initial convolution layer
     x <- keras3::layer_conv_2d(input_layer, 
-                              filters = 64, 
+                              filters = num_res_block_filters, 
                               kernel_size = c(3, 3),
                               padding = "same")
     initial_output <- x  # Store for global skip connection
 
     # Residual blocks
     for (i in 1:num_residual_blocks) {
-      x <- residual_block(x, filters = 64, use_batch_norm = use_batch_norm)
+      x <- residual_block(x, filters = num_res_block_filters, use_batch_norm = use_batch_norm)
     }
 
     # Convolution layer after residual blocks
     x <- keras3::layer_conv_2d(x, 
-                              filters = 64, 
+                              filters = num_res_block_filters, 
                               kernel_size = c(3, 3),
                               padding = "same")
 
@@ -280,8 +290,9 @@ srdrn <- function(input_data, target_data, time_points = NULL,
 
     # Upsampling blocks
     upscale_layers <- floor(log2(upscale_factor))
+    upscale_filters <- upscaling_filters[1:upscale_layers]
     for (i in 1:upscale_layers) {
-      x <- upsampling_block(x, filters = 128)
+      x <- upsampling_block(x, filters = upscale_filters[i])
     }
 
     # Final convolution to produce output
@@ -293,18 +304,18 @@ srdrn <- function(input_data, target_data, time_points = NULL,
 
     if (!is.null(time_points)) {
         inputs <- list(input_layer, t_input)
-        input_data <- list(input_data, time_points)
+        coarse_data <- list(coarse_data, time_points)
     } else {
         inputs <- list(input_layer)
-        input_data <- list(input_data)
+        coarse_data <- list(coarse_data)
     }
-    if (!is.null(val_input_data) && !is.null(val_target_data)) {
+    if (!is.null(val_coarse_data) && !is.null(val_fine_data)) {
         if (!is.null(time_points) && !is.null(val_time_points)) {
-            val_input_list <- list(val_input_data, val_time_points)
+            val_input_list <- list(val_coarse_data, val_time_points)
         } else {
-            val_input_list <- list(val_input_data)
+            val_input_list <- list(val_coarse_data)
         }
-        validation_data <- list(val_input_list, val_target_data)
+        validation_data <- list(val_input_list, val_fine_data)
     } else {
         validation_data <- NULL
     }
@@ -325,8 +336,8 @@ srdrn <- function(input_data, target_data, time_points = NULL,
     
     # Fit the model
     history <- model_sequential %>% keras3::fit(
-        input_data,
-        target_data,
+        coarse_data,
+        fine_data,
         sample_weight = !target_mask,
         validation_data = validation_data,
         validation_split = validation_split,
@@ -364,43 +375,43 @@ srdrn <- function(input_data, target_data, time_points = NULL,
 #' 
 #' @param object A trained SRDRN object.
 #' @param newdata A 3D array of shape (N_1, N_1, n) representing the new data to be predicted.
+#' @param time_points An optional vector of time points of the new data.
 #' @param ... Additional parameters (not used).
 #' 
 #' @return A 3D array of shape (N_2, N_2, n) representing the predicted data.
 #' 
 #' @details
-#' The predict method for the SRDRN class takes a trained SRDRN object and new data as input.
-#' It normalizes the new data using the same min-max scaling used during training.
+#' The predict method for the SRDRN class takes a trained SRDRN object and new data as input. 
+#' The input resolution (N_1 x N_1) has to match the input dimension of the training samples.
+#' The method normalizes the new data using the same min-max scaling used during training.
 #' The new data is reshaped to match the input shape of the model,
 #' and the model is used to make predictions.
-#' The predictions are then rescaled back to the original range using the min-max scaling parameters
-#' obtained during training.
+#' The output data has the same fine resolution (N_2 x N_2) as the target training data.
+#' The predictions are rescaled back to the original range using the min-max scaling parameters
+#' of the training data.
 #' The output is a 3D array of the predicted data.
 #'
 #' @examples
-#' \dontrun{
 #' # Generate dummy low-resolution (16×16) and high-resolution (32×32) data
-#' n <- 20
-#' input  <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
-#' target <- array(runif(32 * 32 * n),  dim = c(32, 32, n))
+#' n <- 10
+#' input  <- array(runif(8 * 8 * n),  dim = c(8, 8, n))
+#' target <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
 #'
-#' # Example 2: Spatio-temporal downscaling using time points
 #' time_vec <- 1:n
 #' model <- srdrn(
-#'   input_data  = input,
-#'   target_data = target,
+#'   coarse_data  = input,
+#'   fine_data = target,
 #'   time_points = time_vec,
 #'   cyclical_period = 365,
 #'   temporal_layers = c(32, 64),
-#'   epochs = 2,
+#'   epochs = 1,
 #'   batch_size = 4
 #' )
 #' 
 #' n_new <- 3
-#' newdata <- array(runif(16 * 16 * n_new),
-#'                      dim = c(16, 16, n_new))
+#' newdata <- array(runif(8 * 8 * n_new),
+#'                      dim = c(8, 8, n_new))
 #' predictions <- predict(model, newdata, 1:n_new)
-#' }
 #' 
 #' @seealso \code{\link{srdrn}} for fitting SRDRN model.
 #'

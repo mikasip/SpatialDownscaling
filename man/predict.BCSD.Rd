@@ -4,12 +4,12 @@
 \alias{predict.BCSD}
 \title{Predict method for BCSD model}
 \usage{
-\method{predict}{BCSD}(object, new_coarse_data, ...)
+\method{predict}{BCSD}(object, newdata, ...)
 }
 \arguments{
 \item{object}{A BCSD model object.}
 
-\item{new_coarse_data}{Matrix, array or raster. The new coarse resolution data to be downscaled.}
+\item{newdata}{Matrix, array or raster. The new coarse resolution data to be downscaled.}
 
 \item{...}{Additional arguments (not used).}
 }

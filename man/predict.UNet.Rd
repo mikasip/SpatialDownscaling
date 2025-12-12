@@ -4,12 +4,12 @@
 \alias{predict.UNet}
 \title{Predict function for UNet model}
 \usage{
-\method{predict}{UNet}(object, newdata, time_points = NULL)
+\method{predict}{UNet}(object, newdata, time_points = NULL, ...)
 }
 \arguments{
 \item{object}{A UNet model object.}
 
-\item{newdata}{Array or list of arrays. New data to predict on in format `\link{x, y, variables, time}``.}
+\item{newdata}{Array or list of arrays. New data to predict on in format (x, y, time).}
 
 \item{time_points}{An optional numeric vector containing the time points of the new data.}
 
@@ -23,8 +23,6 @@ The predict function applies the trained UNet model to new coarse data.
 It performs denormalization if the model was trained with normalization.
 }
 \examples{
-\dontrun{
-library(keras3)
 
 # Create tiny dummy data:
 # Coarse grid: 8x8 → Fine grid: 16x16
@@ -33,12 +31,12 @@ nx_f <- 16; ny_f <- 16
 T <- 5  # number of time steps
 
 # Coarse data:
-coarse_data <- array(runif(nx_c * ny_c * 1 * T),
-                     dim = c(nx_c, ny_c, 1, T))
+coarse_data <- array(runif(nx_c * ny_c * T),
+                     dim = c(nx_c, ny_c, T))
 
 # Fine data:
-fine_data <- array(runif(nx_f * ny_f * 1 * T),
-                   dim = c(nx_f, ny_f, 1, T))
+fine_data <- array(runif(nx_f * ny_f * T),
+                   dim = c(nx_f, ny_f, T))
 
 # Optional time points
 time_points <- 1:T
@@ -56,10 +54,9 @@ model_obj <- unet(
 )
 
 T_new <- 3
-newdata <- array(runif(nx_c * ny_c * 1 * T_new),
-                     dim = c(nx_c, ny_c, 1, T_new))
+newdata <- array(runif(nx_c * ny_c * T_new),
+                     dim = c(nx_c, ny_c, T_new))
 predictions <- predict(model_obj, newdata, 1:T_new)
-}
 
 }
 \seealso{

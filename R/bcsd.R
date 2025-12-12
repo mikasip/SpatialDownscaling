@@ -25,21 +25,22 @@
 #' The interpolation step uses the specified method to create a fine resolution grid from the coarse data.
 #' 
 #' @return A list containing the trained model components:
-#'   \item{quantile_map}{Quantile mapping function for bias correction}
-#'   \item{scaler_coarse}{Scaler for coarse data normalization (if normalize=TRUE)}
-#'   \item{scaler_fine}{Scaler for fine data normalization (if normalize=TRUE)}
-#'   \item{interpolation_params}{Parameters for spatial interpolation}
-#'   \item{axis_names}{Names of the axes in the fine data}
-#'   \item{model_params}{List of all model parameters}
+#'   \item{quantile_map}{Quantile mapping function for bias correction.}
+#'   \item{interpolation_params}{Parameters for spatial interpolation.}
+#'   \item{axis_names}{Names of the axes in the fine data.}
+#'   \item{scalers}{List of scalers. If `normalize = TRUE`, 
+#'    the list contains scalers `coarse` and `fine` 
+#'    for the coarse and fine data, respectively.
+#'    If `normalize = FALSE`, the list is empty.}
+#'   \item{model_params}{List of all model parameters.}
 #'
 #' @examples
 #' # Simple example with random data
-#' \dontrun{
-#' coarse <- array(rnorm(10*20*30), dim = c(10, 20, 30))  # time x lat x lon
-#' fine <- array(rnorm(10*40*60), dim = c(10, 40, 60))    # time x lat x lon
+#' coarse <- array(rnorm(8 * 8 * 10), dim = c(8, 8, 10))  # e.g. lat x lon x time 
+#' fine <- array(rnorm(16 * 16 * 10), dim = c(16, 16, 10))    # e.g. lat x lon x time
 #' model <- bcsd(coarse, fine, method = "bilinear", n_quantiles = 100)
-#' predictions <- model$predict(coarse_new)
-#' }
+#' coarse_new <- array(rnorm(8 * 8 * 3), dim = c(8, 8, 3))  # e.g. lat x lon x time 
+#' predictions <- predict(model, coarse_new)
 #'
 #' @export
 bcsd <- function(coarse_data, fine_data, method = "bilinear", n_quantiles = 100,
@@ -170,7 +171,7 @@ bcsd <- function(coarse_data, fine_data, method = "bilinear", n_quantiles = 100,
 #' Generates predictions using the trained BCSD model.
 #' 
 #' @param object A BCSD model object.
-#' @param new_coarse_data Matrix, array or raster. The new coarse resolution data to be downscaled.
+#' @param newdata Matrix, array or raster. The new coarse resolution data to be downscaled.
 #' @param ... Additional arguments (not used).
 #' 
 #' @details
@@ -193,7 +194,7 @@ bcsd <- function(coarse_data, fine_data, method = "bilinear", n_quantiles = 100,
 #' @seealso \code{\link{bcsd}} for training the model.
 #' 
 #' @export
-predict.BCSD <- function(object, new_coarse_data, ...) {
+predict.BCSD <- function(object, newdata, ...) {
   # Extract components from the model
   quantile_map <- object$quantile_map
   scalers <- object$scalers
@@ -204,9 +205,9 @@ predict.BCSD <- function(object, new_coarse_data, ...) {
 
   # Apply normalization if used in training
   if (normalize) {
-    new_coarse_norm <- (new_coarse_data - scalers$coarse$mean) / scalers$coarse$sd
+    new_coarse_norm <- (newdata - scalers$coarse$mean) / scalers$coarse$sd
   } else {
-    new_coarse_norm <- new_coarse_data
+    new_coarse_norm <- newdata
   }
   
   # Apply bias correction
@@ -228,7 +229,7 @@ predict.BCSD <- function(object, new_coarse_data, ...) {
 
     # Then resample
     fine_raster <- raster::resample(slice_raster, target_raster,
-                                  method = interpolation_params$method)
+                                  method = method)
     downscaled[, , t] <- raster::as.matrix(fine_raster)
   }
   # Denormalize if needed
@@ -239,7 +240,7 @@ predict.BCSD <- function(object, new_coarse_data, ...) {
   dimnames(downscaled) <- list(
     object$axis_names$longitude,
     object$axis_names$latitude,
-    names(new_coarse_data[1, 1, ])
+    names(newdata[1, 1, ])
   )
 
   return(downscaled)

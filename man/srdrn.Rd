@@ -5,20 +5,24 @@
 \title{Super Resolution CNN for Spatial Downscaling}
 \usage{
 srdrn(
-  input_data,
-  target_data,
+  coarse_data,
+  fine_data,
   time_points = NULL,
-  val_input_data = NULL,
-  val_target_data = NULL,
+  val_coarse_data = NULL,
+  val_fine_data = NULL,
   val_time_points = NULL,
   cyclical_period = NULL,
   temporal_basis = c(9, 17, 37),
   temporal_layers = c(32, 64, 128),
+  temporal_cnn_filters = c(8, 16),
+  temporal_cnn_kernel_sizes = list(c(3, 3), c(3, 3)),
   activation = "relu",
   cos_sin_time = FALSE,
   use_batch_norm = FALSE,
   output_channels = 1,
   num_residual_blocks = 3,
+  num_res_block_filters = 64,
+  upscaling_filters = c(64, 32, 16, 8, 4, 2),
   validation_split = 0,
   start_from_model = NULL,
   epochs = 10,
@@ -27,15 +31,15 @@ srdrn(
 )
 }
 \arguments{
-\item{input_data}{A 3D array of shape (N_1, N_1, n) representing the input data.}
+\item{coarse_data}{A 3D array of shape (N_1, N_1, n) representing the input data.}
 
-\item{target_data}{A 3D array of shape (N_2, N_2, n) representing the target data.}
+\item{fine_data}{A 3D array of shape (N_2, N_2, n) representing the target data.}
 
 \item{time_points}{An optional numeric vector of length n representing the time points associated with each sample.}
 
-\item{val_input_data}{An optional 3D array of shape (N_1, N_1, n) representing the input validation data.}
+\item{val_coarse_data}{An optional 3D array of shape (N_1, N_1, n) representing the input validation data.}
 
-\item{val_target_data}{An optional 3D array of shape (N_2, N_2, n) representing the target validation data.}
+\item{val_fine_data}{An optional 3D array of shape (N_2, N_2, n) representing the target validation data.}
 
 \item{val_time_points}{An optional numeric vector of length n representing the time points of the validation samples.}
 
@@ -44,6 +48,10 @@ srdrn(
 \item{temporal_basis}{A numeric vector specifying the temporal basis functions to use for time encoding (default is c(9, 17, 37)).}
 
 \item{temporal_layers}{A numeric vector specifying the number of units in each dense layer for time encoding (default is c(32, 64, 128)).}
+
+\item{temporal_cnn_filters}{A numeric vector specifying the number of filters in each convolutional layer for temporal feature processing (default is c(8, 16)).}
+
+\item{temporal_cnn_kernel_sizes}{A list of integer vectors specifying the kernel sizes for each convolutional layer in the temporal feature processing (default is list(c(3, 3), c(3, 3))).}
 
 \item{activation}{A character string specifying the activation function to use (default is "relu").}
 
@@ -54,6 +62,11 @@ srdrn(
 \item{output_channels}{An integer specifying the number of output channels (default is 1).}
 
 \item{num_residual_blocks}{An integer specifying the number of residual blocks in the model (default is 3).}
+
+\item{num_res_block_filters}{A integer specifying the number of filters in each residual block (default is 64).}
+
+\item{upscaling_filters}{A numeric vector specifying the number of filters in each upsampling layer
+(by default, the first X values from vector c(64, 32, 16, 8, 4, 2) are selected, where X is the upscaling factor.).}
 
 \item{validation_split}{A numeric value between 0 and 1 specifying the fraction of the training data to use for validation (default is 0.2).}
 
@@ -82,7 +95,7 @@ An object of class SRDRN containing:
 }
 \description{
 This function implements a Time-aware Super Resolution Deep Neural Network (SRDRN)
-for spatial downscaling of grid based data using the TensorFlow and Keras libraries.
+for spatial downscaling of grid based data.
 The function allows an option for adding a temporal module for spatio-temporal applications.
 }
 \details{
@@ -123,32 +136,17 @@ with CNN features. This enables learning time-varying downscaling dynamics
 (e.g., seasonality, long-term trends).
 }
 \examples{
-\dontrun{
 # Generate dummy low-resolution (16×16) and high-resolution (32×32) data
 n <- 20
 input  <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
 target <- array(runif(32 * 32 * n),  dim = c(32, 32, n))
 
-# Example 1: Spatial downscaling (no time)
 model1 <- srdrn(
-  input_data  = input,
-  target_data = target,
-  epochs = 2,
+  coarse_data  = input,
+  fine_data = target,
+  epochs = 1,
   batch_size = 4
 )
-
-# Example 2: Spatio-temporal downscaling using time points
-time_vec <- 1:n
-model2 <- srdrn(
-  input_data  = input,
-  target_data = target,
-  time_points = time_vec,
-  cyclical_period = 365,
-  temporal_layers = c(32, 64),
-  epochs = 2,
-  batch_size = 4
-)
-}
 
 }
 \references{

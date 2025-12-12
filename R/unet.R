@@ -5,20 +5,22 @@
 #' Time-aware UNet features an encoder-decoder architecture with skip connections and a temporal module.
 #' The function allows an option for adding a temporal module for spatio-temporal applications.
 #'
-#' @param coarse_data 3D or 4D array. The coarse resolution input data in format 
-#' `[x, y, variables, time]`, where the variables dimension is optional.
-#' @param fine_data 3D or 4D array. The fine resolution target data in format 
-#' `[x, y, variables, time]`, where the variables dimension is optional.
+#' @param coarse_data 3D  array. The coarse resolution input data in format 
+#' (x, y, time).
+#' @param fine_data 3D array. The fine resolution target data in format 
+#' (x, y, time).
 #' @param time_points Numeric vector. Optional time points corresponding to each time step in the data.
-#' @param val_coarse_data An optional 3D or 4D array of coarse resolution input data in format 
-#' `[x, y, variables, time]`, where the variables dimension is optional.
-#' @param val_fine_data An optional 3D or 4D array of fine resolution target data in format 
-#' `[x, y, variables, time]`, where the variables dimension is optional.
+#' @param val_coarse_data An optional 3D array of coarse resolution input data in format 
+#' (x, y, time).
+#' @param val_fine_data An optional 3D array of fine resolution target data in format 
+#' (x, y, time).
 #' @param val_time_points An optional numeric vector of length n representing the time points of the validation samples.
 #' @param cycle_onehot Boolean. If TRUE, a onehot encoded vector of temporal cycles is added as input to temporal module.
 #' @param cyclical_period Numeric. Optional period for cyclical time encoding (e.g., 365 for yearly seasonality).
 #' @param temporal_basis A numeric vector specifying the temporal basis functions to use for time encoding (default is c(9, 17, 37)).
 #' @param temporal_layers A numeric vector specifying the number of units in each dense layer for time encoding (default is c(32, 64, 128)).
+#' @param temporal_cnn_filters A numeric vector specifying the number of filters in each convolutional layer for temporal feature processing (default is c(8, 16)).
+#' @param temporal_cnn_kernel_sizes A list of integer vectors specifying the kernel sizes for each convolutional layer in the temporal feature processing (default is list(c(3, 3), c(3, 3))).
 #' @param cos_sin_transform Logical. Whether to use cosine-sine transformation for time features. Default: FALSE.
 #' @param initial_filters Integer vector. Number of filters in the initial convolutional layers. Default: c(16).
 #' @param initial_kernel_sizes List of integer vectors. Kernel sizes for the initial convolutional layers. Default: list(c(3, 3)).
@@ -34,6 +36,7 @@
 #' @param metrics Optional character vector. Metrics to track during training.
 #' @param batch_size Integer. Batch size for training. Default: 32.
 #' @param epochs Integer. Number of training epochs. Default: 100.
+#' @param start_from_model An optional pre-trained Keras model to continue training from (default is NULL).
 #' @param validation_split Numeric. Fraction of data to use for validation. Default: 0.2.
 #' @param normalize Logical. Whether to normalize data before training. Default: TRUE.
 #' @param callbacks List. Keras callbacks for training. Default: NULL.
@@ -81,8 +84,6 @@
 #' validation data, and configurable UNet depth and width.
 #'
 #' @examples
-#' \dontrun{
-#' library(keras3)
 #'
 #' # Create tiny dummy data:
 #' # Coarse grid: 8x8 → Fine grid: 16x16
@@ -91,12 +92,12 @@
 #' T <- 5  # number of time steps
 #'
 #' # Coarse data:
-#' coarse_data <- array(runif(nx_c * ny_c * 1 * T),
-#'                      dim = c(nx_c, ny_c, 1, T))
+#' coarse_data <- array(runif(nx_c * ny_c * T),
+#'                      dim = c(nx_c, ny_c, T))
 #'
 #' # Fine data:
-#' fine_data <- array(runif(nx_f * ny_f * 1 * T),
-#'                    dim = c(nx_f, ny_f, 1, T))
+#' fine_data <- array(runif(nx_f * ny_f * T),
+#'                    dim = c(nx_f, ny_f, T))
 #'
 #' # Optional time points
 #' time_points <- 1:T
@@ -112,7 +113,6 @@
 #'   batch_size = 2,
 #'   verbose = 0
 #' )
-#' }
 #' 
 #' @references 
 #' \insertAllCited{}
@@ -128,6 +128,8 @@ unet <- function(coarse_data, fine_data,
                           cos_sin_transform = FALSE,
                           temporal_basis = c(9, 17, 37),
                           temporal_layers = c(32, 64, 128),
+                          temporal_cnn_filters = c(8, 16),
+                          temporal_cnn_kernel_sizes = list(c(3, 3), c(3, 3)),
                           initial_filters = c(16),
                           initial_kernel_sizes = list(c(3, 3)),
                           filters = c(32, 64, 128),
@@ -141,46 +143,35 @@ unet <- function(coarse_data, fine_data,
                           loss = "mse",
                           metrics = c(),
                           batch_size = 32,
-                          epochs = 100,
+                          epochs = 10,
+                          start_from_model = NULL,
                           validation_split = 0.2,
                           normalize = TRUE,
                           callbacks = NULL,
                           seed = NULL,
                           verbose = 1) {
 
-  # Import keras and tensorflow with explicit namespaces
-  if (verbose > 0) cat("Setting up Keras and TensorFlow...\n")
-  
-  # Process input and output data to ensure correct format [x, y, variables, time]
-  if (verbose > 0) cat("Checking and preprocessing data format...\n")
-
   axis_names <- dimnames(fine_data)
-  # Check and adjust coarse_data format if needed
+  if (is.null(axis_names)) {
+    axis_names <- list(
+      paste0("x", 1:dim(fine_data)[1]),
+      paste0("y", 1:dim(fine_data)[2]),
+      paste0("time", 1:dim(fine_data)[3])
+    )
+  }
+
   coarse_dim <- dim(coarse_data)
-  if (length(coarse_dim) == 3) {
-    # Format is [x, y, time], add variables dimension
-    if (verbose > 0) cat("Adding channel dimension to coarse_data...\n")
-    coarse_data <- array(coarse_data, dim = c(coarse_dim[1], coarse_dim[2], 1, coarse_dim[3]))
-    if (!is.null(val_coarse_data)) {
-      val_coarse_dim <- dim(val_coarse_data)
-      val_coarse_data <- array(val_coarse_data, dim = c(val_coarse_dim[1], val_coarse_dim[2], 1, val_coarse_dim[3]))
-    }
-  } else if (length(coarse_dim) != 4) {
-    stop("coarse_data must be 3D [x, y, time] or 4D [x, y, variables, time]")
+  coarse_data <- array(coarse_data, dim = c(coarse_dim[1], coarse_dim[2], 1, coarse_dim[3]))
+  if (!is.null(val_coarse_data)) {
+    val_coarse_dim <- dim(val_coarse_data)
+    val_coarse_data <- array(val_coarse_data, dim = c(val_coarse_dim[1], val_coarse_dim[2], 1, val_coarse_dim[3]))
   }
   
-  # Check and adjust fine_data format if needed
   fine_dim <- dim(fine_data)
-  if (length(fine_dim) == 3) {
-    # Format is [x, y, time], add variables dimension
-    if (verbose > 0) cat("Adding channel dimension to fine_data...\n")
-    fine_data <- array(fine_data, dim = c(fine_dim[1], fine_dim[2], 1, fine_dim[3]))
-    if (!is.null(val_fine_data)) {
-      val_fine_dim <- dim(val_fine_data)
-      val_fine_data <- array(val_fine_data, dim = c(val_fine_dim[1], val_fine_dim[2], 1, val_fine_dim[3]))
-    }
-  } else if (length(fine_dim) != 4) {
-    stop("fine_data must be 3D [x, y, time] or 4D [x, y, variables, time]")
+  fine_data <- array(fine_data, dim = c(fine_dim[1], fine_dim[2], 1, fine_dim[3]))
+  if (!is.null(val_fine_data)) {
+    val_fine_dim <- dim(val_fine_data)
+    val_fine_data <- array(val_fine_data, dim = c(val_fine_dim[1], val_fine_dim[2], 1, val_fine_dim[3]))
   }
   
   # Get dimensions after any adjustments
@@ -201,9 +192,6 @@ unet <- function(coarse_data, fine_data,
   
   # Calculate upscaling factor
   upscale_factor <- fine_dim[1] / coarse_dim[1]
-  
-  # Prepare data for Keras - reshape to [time, x, y, variables]
-  if (verbose > 0) cat("Reshaping data for Keras format [time, x, y, variables]...\n")
   
   # Permute dimensions from [x, y, variables, time] to [time, x, y, variables]
   coarse_data_keras <- aperm(coarse_data, c(4, 1, 2, 3))
@@ -322,6 +310,16 @@ unet <- function(coarse_data, fine_data,
     t_branch <- t_branch %>% 
       keras3::layer_dense(bottleneck_width * bottleneck_height, activation = activation) %>%
       keras3::layer_reshape(c(bottleneck_width, bottleneck_height, 1))
+      for (i in seq_along(temporal_cnn_filters)) {
+        t_branch <- t_branch %>%
+          keras3::layer_conv_2d(
+            filters = temporal_cnn_filters[i],
+            kernel_size = temporal_cnn_kernel_sizes[[i]],
+            padding = "same",
+            activation = activation
+          )
+      }
+    
   } else {
     min_time_point <- NULL
     max_time_point <- NULL
@@ -449,27 +447,34 @@ unet <- function(coarse_data, fine_data,
   }
   
   # Create model
-  model <- keras3::keras_model(inputs = inputs, outputs = output_layer)
-  print(paste0("Validation input shape: ", dim(val_data_coarse)))
-  print(paste0("Validation output shape: ", dim(val_data_fine)))
-
-  # Configure optimizer with learning rate
-  if (optimizer == "adam") {
-    opt <- keras3::optimizer_adam(learning_rate = learning_rate)
-  } else if (optimizer == "rmsprop") {
-    opt <- keras3::optimizer_rmsprop(learning_rate = learning_rate)
-  } else if (optimizer == "sgd") {
-    opt <- keras3::optimizer_sgd(learning_rate = learning_rate)
+  if (!is.null(start_from_model)) {
+        model <- start_from_model
+        keras3::set_weights(model, keras3::get_weights(model))
   } else {
-    opt <- optimizer  # Assume it's already an optimizer object
+    model <- keras3::keras_model(inputs = inputs, outputs = output_layer)
+    if (!is.null(val_coarse_data) & !(is.null(val_fine_data))) {
+      print(paste0("Validation input shape: ", dim(val_data_coarse)))
+      print(paste0("Validation output shape: ", dim(val_data_fine)))
+    }
+
+    # Configure optimizer with learning rate
+    if (optimizer == "adam") {
+      opt <- keras3::optimizer_adam(learning_rate = learning_rate)
+    } else if (optimizer == "rmsprop") {
+      opt <- keras3::optimizer_rmsprop(learning_rate = learning_rate)
+    } else if (optimizer == "sgd") {
+      opt <- keras3::optimizer_sgd(learning_rate = learning_rate)
+    } else {
+      opt <- optimizer  # Assume it's already an optimizer object
+    }
+    
+    # Compile the model
+    model %>% keras3::compile(
+      optimizer = opt,
+      loss = loss,
+      metrics = metrics
+    )
   }
-  
-  # Compile the model
-  model %>% keras3::compile(
-    optimizer = opt,
-    loss = loss,
-    metrics = metrics
-  )
   
   # Train the model
   if (verbose > 0) cat("Training UNet model...\n")
@@ -509,7 +514,7 @@ unet <- function(coarse_data, fine_data,
 #' Generates predictions using the trained UNet model.
 #' 
 #' @param object A UNet model object.
-#' @param newdata Array or list of arrays. New data to predict on in format `[x, y, variables, time]``.
+#' @param newdata Array or list of arrays. New data to predict on in format (x, y, time).
 #' @param time_points An optional numeric vector containing the time points of the new data.
 #' @param ... Additional arguments (not used).
 #' 
@@ -518,8 +523,6 @@ unet <- function(coarse_data, fine_data,
 #' It performs denormalization if the model was trained with normalization.
 
 #' @examples
-#' \dontrun{
-#' library(keras3)
 #'
 #' # Create tiny dummy data:
 #' # Coarse grid: 8x8 → Fine grid: 16x16
@@ -528,12 +531,12 @@ unet <- function(coarse_data, fine_data,
 #' T <- 5  # number of time steps
 #'
 #' # Coarse data:
-#' coarse_data <- array(runif(nx_c * ny_c * 1 * T),
-#'                      dim = c(nx_c, ny_c, 1, T))
+#' coarse_data <- array(runif(nx_c * ny_c * T),
+#'                      dim = c(nx_c, ny_c, T))
 #'
 #' # Fine data:
-#' fine_data <- array(runif(nx_f * ny_f * 1 * T),
-#'                    dim = c(nx_f, ny_f, 1, T))
+#' fine_data <- array(runif(nx_f * ny_f * T),
+#'                    dim = c(nx_f, ny_f, T))
 #'
 #' # Optional time points
 #' time_points <- 1:T
@@ -551,15 +554,14 @@ unet <- function(coarse_data, fine_data,
 #' )
 #' 
 #' T_new <- 3
-#' newdata <- array(runif(nx_c * ny_c * 1 * T_new),
-#'                      dim = c(nx_c, ny_c, 1, T_new))
+#' newdata <- array(runif(nx_c * ny_c * T_new),
+#'                      dim = c(nx_c, ny_c, T_new))
 #' predictions <- predict(model_obj, newdata, 1:T_new)
-#' }
 #' 
 #' @seealso \code{\link{unet}} for fitting UNet model.
 #' 
 #' @export
-predict.UNet <- function(object, newdata, time_points = NULL) {
+predict.UNet <- function(object, newdata, time_points = NULL, ...) {
   if (is.null(object$model)) stop("The model has not been trained yet.")
   
   newdata <- aperm(newdata, c(3, 1, 2))
@@ -581,7 +583,7 @@ predict.UNet <- function(object, newdata, time_points = NULL) {
       season <- (time_points - 1) %/% (object$cyclical_period)
       max_season_inds <- which(season > object$max_season)
       season[max_season_inds] <- object$max_season
-      season_onehot <- model.matrix(~ as.factor(c(all_seasons, season)) - 1)
+      season_onehot <- stats::model.matrix(~ as.factor(c(all_seasons, season)) - 1)
       season_onehot <- season_onehot[-(1:length(all_seasons)), ]
       time_points <- time_points %% object$cyclical_period
     }
@@ -605,6 +607,8 @@ predict.UNet <- function(object, newdata, time_points = NULL) {
   predictions <- as.array(predictions)
   predictions[mask_pred] <- NA
   predictions <- aperm(predictions, c(2, 3, 1, 4))
+  print(dim(predictions))
+  print(object$axis_names)
   new_dimnames <- append(object$axis_names[1:2], list(1:dim(predictions)[3], 1:dim(predictions)[4]))
   dimnames(predictions) <- new_dimnames
   
