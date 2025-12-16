@@ -588,7 +588,7 @@ predict.UNet <- function(object, newdata, time_points = NULL, ...) {
       time_points <- time_points %% object$cyclical_period
     }
     time_points <- keras3::array_reshape(time_points, c(length(time_points), 1))
-    if (!is.null(object$cyclical_period) & !is.null(object$cycle_onehot))  {
+    if (!is.null(object$cyclical_period) & object$cycle_onehot)  {
       inputs <- list(newdata, time_points, season_onehot)
     } else {
       inputs <- list(newdata, time_points)
@@ -607,8 +607,6 @@ predict.UNet <- function(object, newdata, time_points = NULL, ...) {
   predictions <- as.array(predictions)
   predictions[mask_pred] <- NA
   predictions <- aperm(predictions, c(2, 3, 1, 4))
-  print(dim(predictions))
-  print(object$axis_names)
   new_dimnames <- append(object$axis_names[1:2], list(1:dim(predictions)[3], 1:dim(predictions)[4]))
   dimnames(predictions) <- new_dimnames
   
