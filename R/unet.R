@@ -259,6 +259,7 @@ unet <- function(coarse_data, fine_data,
   if (!is.null(seed)) {
     set.seed(seed)
     tensorflow::tf$random$set_seed(seed)
+    keras3::set_random_seed(as.integer(seed))
   }
   max_season <- NULL
   # --- Temporal branch ---
