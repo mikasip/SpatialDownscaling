@@ -36,26 +36,28 @@ of the training data.
 The output is a 3D array of the predicted data.
 }
 \examples{
-# Generate dummy low-resolution (16×16) and high-resolution (32×32) data
-n <- 10
-input  <- array(runif(8 * 8 * n),  dim = c(8, 8, n))
-target <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
-
-time_vec <- 1:n
-model <- srdrn(
-  coarse_data  = input,
-  fine_data = target,
-  time_points = time_vec,
-  cyclical_period = 365,
-  temporal_layers = c(32, 64),
-  epochs = 1,
-  batch_size = 4
-)
-
-n_new <- 3
-newdata <- array(runif(8 * 8 * n_new),
-                     dim = c(8, 8, n_new))
-predictions <- predict(model, newdata, 1:n_new)
+\dontrun{
+ # Generate dummy low-resolution (16×16) and high-resolution (32×32) data
+ n <- 10
+ input  <- array(runif(8 * 8 * n),  dim = c(8, 8, n))
+ target <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
+ 
+ time_vec <- 1:n
+ model <- srdrn(
+   coarse_data  = input,
+   fine_data = target,
+   time_points = time_vec,
+   cyclical_period = 365,
+   temporal_layers = c(32, 64),
+   epochs = 1,
+   batch_size = 4
+ )
+ 
+ n_new <- 3
+ newdata <- array(runif(8 * 8 * n_new),
+                      dim = c(8, 8, n_new))
+ predictions <- predict(model, newdata, 1:n_new)
+}
 
 }
 \seealso{

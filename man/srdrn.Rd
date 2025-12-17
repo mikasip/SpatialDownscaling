@@ -25,6 +25,7 @@ srdrn(
   upscaling_filters = c(64, 32, 16, 8, 4, 2),
   validation_split = 0,
   start_from_model = NULL,
+  metrics = c(),
   epochs = 10,
   batch_size = 32,
   seed = NULL
@@ -71,6 +72,8 @@ srdrn(
 \item{validation_split}{A numeric value between 0 and 1 specifying the fraction of the training data to use for validation (default is 0.2).}
 
 \item{start_from_model}{An optional pre-trained Keras model to continue training from (default is NULL).}
+
+\item{metrics}{A character vector specifying additional metrics to monitor during training (default is an empty vector).}
 
 \item{epochs}{An integer specifying the number of training epochs (default is 10).}
 
@@ -136,17 +139,19 @@ with CNN features. This enables learning time-varying downscaling dynamics
 (e.g., seasonality, long-term trends).
 }
 \examples{
-# Generate dummy low-resolution (16×16) and high-resolution (32×32) data
-n <- 20
-input  <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
-target <- array(runif(32 * 32 * n),  dim = c(32, 32, n))
-
-model1 <- srdrn(
-  coarse_data  = input,
-  fine_data = target,
-  epochs = 1,
-  batch_size = 4
-)
+\dontrun{
+ # Generate dummy low-resolution (16×16) and high-resolution (32×32) data
+ n <- 20
+ input  <- array(runif(16 * 16 * n),  dim = c(16, 16, n))
+ target <- array(runif(32 * 32 * n),  dim = c(32, 32, n))
+ 
+ model1 <- srdrn(
+   coarse_data  = input,
+   fine_data = target,
+   epochs = 1,
+   batch_size = 4
+ )
+}
 
 }
 \references{

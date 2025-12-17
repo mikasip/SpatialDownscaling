@@ -33,7 +33,7 @@ unet(
   batch_size = 32,
   epochs = 10,
   start_from_model = NULL,
-  validation_split = 0.2,
+  validation_split = 0,
   normalize = TRUE,
   callbacks = NULL,
   seed = NULL,
@@ -93,7 +93,7 @@ unet(
 
 \item{loss}{Character or loss function. Loss function for training. Default: "mse".}
 
-\item{metrics}{Optional character vector. Metrics to track during training.}
+\item{metrics}{Optional character vector. Metrics to track during training. Default is an empty vector.}
 
 \item{batch_size}{Integer. Batch size for training. Default: 32.}
 
@@ -101,7 +101,7 @@ unet(
 
 \item{start_from_model}{An optional pre-trained Keras model to continue training from (default is NULL).}
 
-\item{validation_split}{Numeric. Fraction of data to use for validation. Default: 0.2.}
+\item{validation_split}{Numeric. Fraction of data to use for validation. Default: 0.}
 
 \item{normalize}{Logical. Whether to normalize data before training. Default: TRUE.}
 
@@ -155,35 +155,37 @@ validation data, and configurable UNet depth and width.
 }
 \examples{
 
-# Create tiny dummy data:
-# Coarse grid: 8x8 → Fine grid: 16x16
-nx_c <- 8; ny_c <- 8
-nx_f <- 16; ny_f <- 16
-T <- 5  # number of time steps
-
-# Coarse data:
-coarse_data <- array(runif(nx_c * ny_c * T),
-                     dim = c(nx_c, ny_c, T))
-
-# Fine data:
-fine_data <- array(runif(nx_f * ny_f * T),
-                   dim = c(nx_f, ny_f, T))
-
-# Optional time points
-time_points <- 1:T
-
-# Fit a tiny UNet (very small filters to keep the example fast)
-model_obj <- unet(
-  coarse_data,
-  fine_data,
-  time_points = time_points,
-  filters = c(8, 16),
-  initial_filters = c(4),
-  epochs = 2,
-  batch_size = 2,
-  verbose = 0
-)
-
+\dontrun{
+ # Create tiny dummy data:
+ # Coarse grid: 8x8 → Fine grid: 16x16
+ nx_c <- 8; ny_c <- 8
+ nx_f <- 16; ny_f <- 16
+ T <- 5  # number of time steps
+ 
+ # Coarse data:
+ coarse_data <- array(runif(nx_c * ny_c * T),
+                      dim = c(nx_c, ny_c, T))
+ 
+ # Fine data:
+ fine_data <- array(runif(nx_f * ny_f * T),
+                    dim = c(nx_f, ny_f, T))
+ 
+ # Optional time points
+ time_points <- 1:T
+ 
+ # Fit a tiny UNet (very small filters to keep the example fast)
+ model_obj <- unet(
+   coarse_data,
+   fine_data,
+   time_points = time_points,
+   filters = c(8, 16),
+   initial_filters = c(4),
+   epochs = 1,
+   batch_size = 4,
+   verbose = 0
+ )
+}
+ 
 }
 \references{
 \insertAllCited{}

@@ -85,35 +85,37 @@
 #'
 #' @examples
 #'
-#' # Create tiny dummy data:
-#' # Coarse grid: 8x8 → Fine grid: 16x16
-#' nx_c <- 8; ny_c <- 8
-#' nx_f <- 16; ny_f <- 16
-#' T <- 5  # number of time steps
-#'
-#' # Coarse data:
-#' coarse_data <- array(runif(nx_c * ny_c * T),
-#'                      dim = c(nx_c, ny_c, T))
-#'
-#' # Fine data:
-#' fine_data <- array(runif(nx_f * ny_f * T),
-#'                    dim = c(nx_f, ny_f, T))
-#'
-#' # Optional time points
-#' time_points <- 1:T
-#'
-#' # Fit a tiny UNet (very small filters to keep the example fast)
-#' model_obj <- unet(
-#'   coarse_data,
-#'   fine_data,
-#'   time_points = time_points,
-#'   filters = c(8, 16),
-#'   initial_filters = c(4),
-#'   epochs = 2,
-#'   batch_size = 2,
-#'   verbose = 0
-#' )
-#' 
+#' \dontrun{
+#'  # Create tiny dummy data:
+#'  # Coarse grid: 8x8 → Fine grid: 16x16
+#'  nx_c <- 8; ny_c <- 8
+#'  nx_f <- 16; ny_f <- 16
+#'  T <- 5  # number of time steps
+#'  
+#'  # Coarse data:
+#'  coarse_data <- array(runif(nx_c * ny_c * T),
+#'                       dim = c(nx_c, ny_c, T))
+#'  
+#'  # Fine data:
+#'  fine_data <- array(runif(nx_f * ny_f * T),
+#'                     dim = c(nx_f, ny_f, T))
+#'  
+#'  # Optional time points
+#'  time_points <- 1:T
+#'  
+#'  # Fit a tiny UNet (very small filters to keep the example fast)
+#'  model_obj <- unet(
+#'    coarse_data,
+#'    fine_data,
+#'    time_points = time_points,
+#'    filters = c(8, 16),
+#'    initial_filters = c(4),
+#'    epochs = 1,
+#'    batch_size = 4,
+#'    verbose = 0
+#'  )
+#' }
+#'  
 #' @references 
 #' \insertAllCited{}
 #' 
@@ -525,39 +527,41 @@ unet <- function(coarse_data, fine_data,
 
 #' @examples
 #'
-#' # Create tiny dummy data:
-#' # Coarse grid: 8x8 → Fine grid: 16x16
-#' nx_c <- 8; ny_c <- 8
-#' nx_f <- 16; ny_f <- 16
-#' T <- 5  # number of time steps
-#'
-#' # Coarse data:
-#' coarse_data <- array(runif(nx_c * ny_c * T),
-#'                      dim = c(nx_c, ny_c, T))
-#'
-#' # Fine data:
-#' fine_data <- array(runif(nx_f * ny_f * T),
-#'                    dim = c(nx_f, ny_f, T))
-#'
-#' # Optional time points
-#' time_points <- 1:T
-#'
-#' # Fit a tiny UNet (very small filters to keep the example fast)
-#' model_obj <- unet(
-#'   coarse_data,
-#'   fine_data,
-#'   time_points = time_points,
-#'   filters = c(8, 16),
-#'   initial_filters = c(4),
-#'   epochs = 2,
-#'   batch_size = 2,
-#'   verbose = 0
-#' )
-#' 
-#' T_new <- 3
-#' newdata <- array(runif(nx_c * ny_c * T_new),
-#'                      dim = c(nx_c, ny_c, T_new))
-#' predictions <- predict(model_obj, newdata, 1:T_new)
+#' \dontrun{
+#'  # Create tiny dummy data:
+#'  # Coarse grid: 8x8 → Fine grid: 16x16
+#'  nx_c <- 8; ny_c <- 8
+#'  nx_f <- 16; ny_f <- 16
+#'  T <- 5  # number of time steps
+#'  
+#'  # Coarse data:
+#'  coarse_data <- array(runif(nx_c * ny_c * T),
+#'                       dim = c(nx_c, ny_c, T))
+#'  
+#'  # Fine data:
+#'  fine_data <- array(runif(nx_f * ny_f * T),
+#'                     dim = c(nx_f, ny_f, T))
+#'  
+#'  # Optional time points
+#'  time_points <- 1:T
+#'  
+#'  # Fit a tiny UNet (very small filters to keep the example fast)
+#'  model_obj <- unet(
+#'    coarse_data,
+#'    fine_data,
+#'    time_points = time_points,
+#'    filters = c(8, 16),
+#'    initial_filters = c(4),
+#'    epochs = 1,
+#'    batch_size = 4,
+#'    verbose = 0
+#'  )
+#'  
+#'  T_new <- 3
+#'  newdata <- array(runif(nx_c * ny_c * T_new),
+#'                       dim = c(nx_c, ny_c, T_new))
+#'  predictions <- predict(model_obj, newdata, 1:T_new)
+#' }
 #' 
 #' @return Array of predictions in format (x, y, time).
 #' 
