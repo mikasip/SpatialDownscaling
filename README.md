@@ -2,7 +2,7 @@
 
 ## Overview
 
-`SpatialDownscaling` provides deep learning methods for spatial downscaling of gridded data, particularly focused on meteorological and climate variables. The package implements time-aware UNet and super-resolution deep residual networks (SRDRN) for enhancing the spatial resolution of coarse-grid data, along with a statistical baseline method (BCSD).
+`SpatialDownscaling` provides deep learning methods for spatial downscaling of gridded data, particularly focused on spatio-temporal phenomena such as meteorology and air pollution. The package implements time-aware UNet and super-resolution deep residual networks (SRDRN) for enhancing the spatial resolution of coarse-grid data, along with a statistical baseline method (BCSD).
 
 The package includes the `weather_italy` dataset containing daily gridded weather variables (relative humidity, temperature, and total precipitation) for Italy from November 1 to December 31, 2023, obtained from the ERA5-Land dataset.
 
@@ -27,11 +27,11 @@ devtools::install_github("mikasip/SpatialDownscaling")
 
 ### Time-aware UNet
 
-The UNet architecture is based on Ronneberger et al. (2015) and is extended by incorporating a lightweight temporal module. The temporal module takes the time point of the observation as input, uses radial basis function or sinusoidal positional encoding to encode it to a more representative format, then uses a small feed-forward network followed by a small stack of convolutional layers to encode temporal information into spatial format. The temporal information is concatenated with spatial features obtained by the main UNet at the bottleneck of the network. For more details, see Sipilä et al. (2025).
+The UNet architecture is based on Ronneberger et al. (2015) and extended by incorporating a lightweight temporal module. The temporal module encodes the time point of each observation using radial basis functions or sinusoidal positional encoding, then processes this representation through a small feed-forward network followed by a shallow stack of convolutional layers to transform temporal information into a spatial format. The resulting temporal features are concatenated with the spatial features from the main UNet at the network bottleneck. For more details, see Sipilä et al. (2025).
 
 ### Super-Resolution Deep Residual Networks (SRDRN)
 
-The SRDRN architecture is based on Sha et al. (2020) and is extended by incorporating a lightweight temporal module. The temporal module takes the time point of the observation as input, uses radial basis function or sinusoidal positional encoding to encode it to a more representative format, then uses a small feed-forward network followed by a small stack of convolutional layers to encode temporal information into spatial format. The temporal information is concatenated with spatial features obtained by the main SRDRN before the upscaling layers. For more details, see Sipilä et al. (2025).
+The SRDRN architecture is based on Sha et al. (2020) and extended using an identical temporal module as in the time-aware UNet. The temporal features are concatenated with the spatial features from the main SRDRN before the upscaling blocks. For more details, see Sipilä et al. (2025).
 
 ### Bias Correction and Spatial Disaggregation (BCSD)
 
