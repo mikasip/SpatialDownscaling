@@ -33,11 +33,11 @@
 #' @param optimizer Character or optimizer object. Optimizer for training. Default: "adam".
 #' @param learning_rate Numeric. Learning rate for optimizer. Default: 0.001.
 #' @param loss Character or loss function. Loss function for training. Default: "mse".
-#' @param metrics Optional character vector. Metrics to track during training.
+#' @param metrics Optional character vector. Metrics to track during training. Default is an empty vector.
 #' @param batch_size Integer. Batch size for training. Default: 32.
 #' @param epochs Integer. Number of training epochs. Default: 100.
 #' @param start_from_model An optional pre-trained Keras model to continue training from (default is NULL).
-#' @param validation_split Numeric. Fraction of data to use for validation. Default: 0.2.
+#' @param validation_split Numeric. Fraction of data to use for validation. Default: 0.
 #' @param normalize Logical. Whether to normalize data before training. Default: TRUE.
 #' @param callbacks List. Keras callbacks for training. Default: NULL.
 #' @param seed Integer. Random seed for reproducibility. Default: NULL.
@@ -145,7 +145,7 @@ unet <- function(coarse_data, fine_data,
                           batch_size = 32,
                           epochs = 10,
                           start_from_model = NULL,
-                          validation_split = 0.2,
+                          validation_split = 0,
                           normalize = TRUE,
                           callbacks = NULL,
                           seed = NULL,
@@ -559,6 +559,8 @@ unet <- function(coarse_data, fine_data,
 #'                      dim = c(nx_c, ny_c, T_new))
 #' predictions <- predict(model_obj, newdata, 1:T_new)
 #' 
+#' @return Array of predictions in format (x, y, time).
+#' 
 #' @seealso \code{\link{unet}} for fitting UNet model.
 #' 
 #' @export
@@ -611,5 +613,5 @@ predict.UNet <- function(object, newdata, time_points = NULL, ...) {
   new_dimnames <- append(object$axis_names[1:2], list(1:dim(predictions)[3], 1:dim(predictions)[4]))
   dimnames(predictions) <- new_dimnames
   
-  return(predictions)
+  return(predictions[, , , 1])
 }

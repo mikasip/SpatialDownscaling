@@ -28,6 +28,7 @@
 #' (by default, the first X values from vector c(64, 32, 16, 8, 4, 2) are selected, where X is the upscaling factor.).
 #' @param validation_split A numeric value between 0 and 1 specifying the fraction of the training data to use for validation (default is 0.2).
 #' @param start_from_model An optional pre-trained Keras model to continue training from (default is NULL).
+#' @param metrics A character vector specifying additional metrics to monitor during training (default is an empty vector).
 #' @param epochs An integer specifying the number of training epochs (default is 10).
 #' @param batch_size An integer specifying the batch size for training (default is 32).
 #' @param seed An optional integer value to set the random seed for reproducibility (default is NULL).
@@ -104,11 +105,11 @@ srdrn <- function(coarse_data, fine_data, time_points = NULL,
                     val_coarse_data = NULL, val_fine_data = NULL, val_time_points = NULL, 
                     cyclical_period = NULL, temporal_basis = c(9, 17, 37), 
                     temporal_layers = c(32, 64, 128), temporal_cnn_filters = c(8, 16),
-                    temporal_cnn_kernel_sizes = list(c(3, 3), c(3, 3)),activation = "relu", 
+                    temporal_cnn_kernel_sizes = list(c(3, 3), c(3, 3)), activation = "relu", 
                     cos_sin_time = FALSE,
                     use_batch_norm = FALSE, output_channels = 1, num_residual_blocks = 3,
                     num_res_block_filters = 64, upscaling_filters = c(64, 32, 16, 8, 4, 2),
-                    validation_split = 0, start_from_model = NULL,
+                    validation_split = 0, start_from_model = NULL, metrics = c(),
                     epochs = 10, batch_size = 32, seed = NULL) {
 
     if (dim(coarse_data)[3] != dim(fine_data)[3]) {
@@ -327,7 +328,7 @@ srdrn <- function(coarse_data, fine_data, time_points = NULL,
         model_sequential %>% keras3::compile(
             optimizer = keras3::optimizer_adam(),
             loss = "mse",
-            metrics = list("mae", "mse")
+            metrics = metrics
         )
     }
     if (!is.null(validation_data)) {
@@ -461,5 +462,5 @@ predict.srdrn <- function(object, newdata, time_points = NULL, ...) {
     dimnames(predictions) <- append(object$axis_names[1:2],
                                     list(1:dim(predictions)[3], 1:dim(predictions)[4]))
     
-    return(predictions)
+    return(predictions[, , , 1])
 }
