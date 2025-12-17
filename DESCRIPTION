@@ -3,7 +3,7 @@ Type: Package
 Title: Methods for Spatial Downscaling Using Deep Learning
 Version: 0.1.0
 Date: 2025-12-03
-Authors@R: c(person(given = "Mika", family = "Sipilä", role = c("aut", "cre"), email = "mika.e.sipila@jyu.fi", comment=c(ORCID = "0000-0002-5912-840X")),
+Authors@R: c(person(given = "Mika", family = "Sipilä", role = c("aut", "cre", "cph"), email = "mika.e.sipila@jyu.fi", comment=c(ORCID = "0000-0002-5912-840X")),
              person(given = "Claudia", family = "Cappello", role = c("aut"), email = "claudia.cappello@unisalento.it", comment=c(ORCID = "0000-0002-7905-5068")),
              person(given = "Sandra", family = "De Iaco", role = c("aut"), email = "sandra.deiaco@unisalento.it", comment=c(ORCID = "0000-0003-1820-2068")),
              person(given = "Klaus", family = "Nordhausen", role = c("aut"), email = "klaus.nordhausen@helsinki.fi", comment=c(ORCID = "0000-0002-3758-8501")),

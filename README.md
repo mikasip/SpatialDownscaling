@@ -76,9 +76,9 @@ print(paste("BCSD MAE:", round(bcsd_mae, 4)))
 # Increase the number of initial_filters, filters and epochs
 # for better performance
 model_unet <- unet(
-   coarse_data,
-   fine_data,
-   time_points = time_points,
+   train_coarse_data,
+   train_fine_data,
+   time_points = train_times,
    filters = c(16, 32),
    initial_filters = c(8),
    epochs = 100,
@@ -89,19 +89,18 @@ model_unet <- unet(
 unet_preds <- predict(model_unet,
   test_coarse_data,
   time_points = test_times)
-  
 # Evaluate UNet model performance
 unet_mae <- mean(abs(unet_preds - test_fine_data), na.rm = TRUE)
 print(paste("UNet MAE:", round(unet_mae, 4)))
 
 # Train time-aware SRDRN model
-# Increase the number of epochs and num_res_block_filters
+# Increase the number of epochs and num_res_block_filters (to e.g. 64) 
 # for better performance
  model_srdrn <- srdrn(
-   coarse_data,
-   fine_data,
+   train_coarse_data,
+   train_fine_data,
    num_res_block_filters = 32,
-   time_points = time_points,
+   time_points = train_times,
    epochs = 100,
    batch_size = 32
 )
