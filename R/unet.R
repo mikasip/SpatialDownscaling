@@ -28,18 +28,18 @@
 #' @param kernel_sizes List of integer vectors. Kernel sizes for each convolutional layer. Default: list(c(3, 3), c(3, 3), c(3, 3)).
 #' @param use_batch_norm Logical. Whether to use batch normalization after convolutional layers. Default: FALSE.
 #' @param dropout_rate Numeric. Dropout rate for regularization. Default: 0.2.
-#' @param activation Character. Activation function for hidden layers. Default: "relu".
-#' @param final_activation Character. Activation function for output layer. Default: "linear".
-#' @param optimizer Character or optimizer object. Optimizer for training. Default: "adam".
+#' @param activation Character. Activation function for hidden layers. The options are listed in \url{https://keras.io/api/layers/activations}. Default: "relu".
+#' @param final_activation Character. Activation function for output layer. The options are listed in \url{https://keras.io/api/layers/activations}. Default: "linear".
+#' @param optimizer Character or optimizer object used in `keras3::compile` (see e.g. \link[keras3]{optimizer_adam}). Optimizer for training. The options are listed in \url{https://keras.io/api/optimizers}. Default: "adam".
 #' @param learning_rate Numeric. Learning rate for optimizer. Default: 0.001.
-#' @param loss Character or loss function. Loss function for training. Default: "mse".
-#' @param metrics Optional character vector. Metrics to track during training. Default is an empty vector.
+#' @param loss Character or loss function used in `keras3::compile` (see \link[keras3]{Loss}). Loss function for training. The options are listed in \url{https://keras.io/api/losses}. Default: "mse".
+#' @param metrics Optional character vector used in `keras3::compile`. Metrics to track during training. The options are listed in \url{https://keras.io/api/metrics}. Default is an empty vector.
 #' @param batch_size Integer. Batch size for training. Default: 32.
 #' @param epochs Integer. Number of training epochs. Default: 100.
 #' @param start_from_model An optional pre-trained Keras model to continue training from (default is NULL).
 #' @param validation_split Numeric. Fraction of data to use for validation. Default: 0.
 #' @param normalize Logical. Whether to normalize data before training. Default: TRUE.
-#' @param callbacks List. Keras callbacks for training. Default: NULL.
+#' @param callbacks List. Keras callbacks for training (see \link[keras3]{Callback}). Default: NULL.
 #' @param seed Integer. Random seed for reproducibility. Default: NULL.
 #' @param verbose Integer. Verbosity mode (0, 1, or 2). Default: 1.
 #'
@@ -88,8 +88,10 @@
 #' \dontrun{
 #'  # Create tiny dummy data:
 #'  # Coarse grid: 8x8 → Fine grid: 16x16
-#'  nx_c <- 8; ny_c <- 8
-#'  nx_f <- 16; ny_f <- 16
+#'  nx_c <- 8
+#'  ny_c <- 8
+#'  nx_f <- 16
+#'  ny_f <- 16
 #'  T <- 5  # number of time steps
 #'  
 #'  # Coarse data:
@@ -514,7 +516,7 @@ unet <- function(coarse_data, fine_data,
 #' Predict function for UNet model
 #' 
 #' @description 
-#' Generates predictions using the trained UNet model.
+#' This function generates predictions using a trained UNet model.
 #' 
 #' @param object A UNet model object.
 #' @param newdata Array or list of arrays. New data to predict on in format (x, y, time).
@@ -530,8 +532,10 @@ unet <- function(coarse_data, fine_data,
 #' \dontrun{
 #'  # Create tiny dummy data:
 #'  # Coarse grid: 8x8 → Fine grid: 16x16
-#'  nx_c <- 8; ny_c <- 8
-#'  nx_f <- 16; ny_f <- 16
+#'  nx_c <- 8 
+#'  ny_c <- 8
+#'  nx_f <- 16
+#'  ny_f <- 16
 #'  T <- 5  # number of time steps
 #'  
 #'  # Coarse data:

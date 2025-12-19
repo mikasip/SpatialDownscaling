@@ -7,9 +7,10 @@
 \method{predict}{BCSD}(object, newdata, ...)
 }
 \arguments{
-\item{object}{A BCSD model object.}
+\item{object}{A BCSD model object, an output of the \link{bcsd} function.}
 
-\item{newdata}{Matrix, array or raster. The new coarse resolution data to be downscaled.}
+\item{newdata}{Array or raster that has the new coarse resolution data to be downscaled. The resolution should match the resolution of the training data.
+The first two dimensions are the spatial dimensions and the third refers to the training samples (e.g. time).}
 
 \item{...}{Additional arguments (not used).}
 }
@@ -17,11 +18,12 @@
 A matrix, array or raster of the downscaled predictions at fine resolution.
 }
 \description{
-Generates predictions using the trained BCSD model.
+This function generates predictions using a trained BCSD model.
 }
 \details{
 The predict method applies the trained BCSD model to new coarse resolution data.
-It performs bias correction using the quantile mapping function and then applies spatial interpolation
+It performs bias correction using the quantile mapping function and then applies
+spatial interpolation, specified during model training with the \code{method} parameter,
 to generate fine resolution predictions.
 }
 \examples{

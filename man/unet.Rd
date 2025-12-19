@@ -83,17 +83,17 @@ unet(
 
 \item{dropout_rate}{Numeric. Dropout rate for regularization. Default: 0.2.}
 
-\item{activation}{Character. Activation function for hidden layers. Default: "relu".}
+\item{activation}{Character. Activation function for hidden layers. The options are listed in \url{https://keras.io/api/layers/activations}. Default: "relu".}
 
-\item{final_activation}{Character. Activation function for output layer. Default: "linear".}
+\item{final_activation}{Character. Activation function for output layer. The options are listed in \url{https://keras.io/api/layers/activations}. Default: "linear".}
 
-\item{optimizer}{Character or optimizer object. Optimizer for training. Default: "adam".}
+\item{optimizer}{Character or optimizer object used in \code{keras3::compile} (see e.g. \link[keras3]{optimizer_adam}). Optimizer for training. The options are listed in \url{https://keras.io/api/optimizers}. Default: "adam".}
 
 \item{learning_rate}{Numeric. Learning rate for optimizer. Default: 0.001.}
 
-\item{loss}{Character or loss function. Loss function for training. Default: "mse".}
+\item{loss}{Character or loss function used in \code{keras3::compile} (see \link[keras3]{Loss}). Loss function for training. The options are listed in \url{https://keras.io/api/losses}. Default: "mse".}
 
-\item{metrics}{Optional character vector. Metrics to track during training. Default is an empty vector.}
+\item{metrics}{Optional character vector used in \code{keras3::compile}. Metrics to track during training. The options are listed in \url{https://keras.io/api/metrics}. Default is an empty vector.}
 
 \item{batch_size}{Integer. Batch size for training. Default: 32.}
 
@@ -105,7 +105,7 @@ unet(
 
 \item{normalize}{Logical. Whether to normalize data before training. Default: TRUE.}
 
-\item{callbacks}{List. Keras callbacks for training. Default: NULL.}
+\item{callbacks}{List. Keras callbacks for training (see \link[keras3]{Callback}). Default: NULL.}
 
 \item{seed}{Integer. Random seed for reproducibility. Default: NULL.}
 
@@ -158,8 +158,10 @@ validation data, and configurable UNet depth and width.
 \dontrun{
  # Create tiny dummy data:
  # Coarse grid: 8x8 → Fine grid: 16x16
- nx_c <- 8; ny_c <- 8
- nx_f <- 16; ny_f <- 16
+ nx_c <- 8
+ ny_c <- 8
+ nx_f <- 16
+ ny_f <- 16
  T <- 5  # number of time steps
  
  # Coarse data:

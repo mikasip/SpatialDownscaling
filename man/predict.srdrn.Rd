@@ -9,14 +9,18 @@
 \arguments{
 \item{object}{A trained SRDRN object.}
 
-\item{newdata}{A 3D array of shape (N_1, N_1, n) representing the new data to be predicted.}
+\item{newdata}{A 3D array of shape (N_1, N_1, n) representing the new coarse resolution data to be downscaled,
+where N_1 x N_1 is the coarse resolution of the training samples and n is the number of samples to be downscaled.
+The two first dimensions are the spatial coordinates in grid,
+and the third dimension refers to the samples (e.g. time).}
 
-\item{time_points}{An optional vector of time points of the new data.}
+\item{time_points}{An optional numeric vector of time points of the new data.}
 
 \item{...}{Additional parameters (not used).}
 }
 \value{
-A 3D array of shape (N_2, N_2, n) representing the predicted data.
+A 3D array of shape (N_2, N_2, n) representing the predicted data,
+where N_2 x N_2 is the fine resolution of the training samples.
 }
 \description{
 This function makes predictions using a trained SRDRN model.

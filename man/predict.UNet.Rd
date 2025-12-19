@@ -19,7 +19,7 @@
 Array of predictions in format (x, y, time).
 }
 \description{
-Generates predictions using the trained UNet model.
+This function generates predictions using a trained UNet model.
 }
 \details{
 The predict function applies the trained UNet model to new coarse data.
@@ -30,8 +30,10 @@ It performs denormalization if the model was trained with normalization.
 \dontrun{
  # Create tiny dummy data:
  # Coarse grid: 8x8 → Fine grid: 16x16
- nx_c <- 8; ny_c <- 8
- nx_f <- 16; ny_f <- 16
+ nx_c <- 8 
+ ny_c <- 8
+ nx_f <- 16
+ ny_f <- 16
  T <- 5  # number of time steps
  
  # Coarse data:

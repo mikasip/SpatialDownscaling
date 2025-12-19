@@ -5,26 +5,28 @@
 #' The approach consists of two main steps: (1) bias correction using quantile mapping
 #' and (2) spatial disaggregation using interpolation.
 #'
-#' @param coarse_data A 3D array of coarse resolution input data. The two first dimensions should be spatial coordinates 
-#' (e.g., latitude and longitude) in grid, and the third should be the training samples (e.g. time).
-#' @param fine_data A 3D array of fine resolution output data. The two first dimensions should be spatial coordinates 
-#' (e.g., latitude and longitude) in grid, and the third should be the training samples (e.g. time).
-#' @param method Character. Interpolation method ('bilinear', 'bicubic', or 'nearest'). Default: 'bilinear'.
+#' @param coarse_data A 3D array of coarse resolution input data. The two first dimensions are the spatial coordinates 
+#' (e.g., latitude and longitude) in grid, and the third dimension refers to the training samples (e.g. time).
+#' @param fine_data A 3D array of fine resolution output data. The two first dimensions are the spatial coordinates
+#' (e.g., latitude and longitude) in grid, and the third dimension refers to the training samples (e.g. time).
+#' @param method Character. Interpolation method that is used by \link[raster]{resample} to perform predictions. 
+#' The options are ('bilinear', 'ngb') that refer to bilinear and nearest neighbor interpolation, respectively. Default: 'bilinear'.
 #' @param n_quantiles Integer. Number of quantiles for bias correction. Default: 100.
-#' @param reference_period Vector. Start and end indices or dates for reference period. Default: NULL (use all data).
-#' @param extrapolate Logical. Whether to extrapolate corrections outside calibration range. Default: TRUE.
-#' @param normalize Logical. Whether to normalize data before processing. Default: TRUE.
+#' @param reference_period Vector. Start and end indices for the reference period. Default: NULL (use all data).
+#' @param extrapolate Logical. Indicating whether to extrapolate corrections outside the range of the training data. Default: TRUE.
+#' @param normalize Logical. Indicating whether to normalize data before processing. Default: TRUE.
 #' 
 #' @details 
 #' The BCSD method is a statistical downscaling technique that combines bias correction
 #' and spatial disaggregation. It uses quantile mapping to correct biases in coarse resolution data
 #' and then applies spatial interpolation to disaggregate the data to a finer resolution.
 #' 
-#' The function allows for different interpolation methods and the option to normalize data before processing.
+#' The function allows for the interpolation methods "bilinear" and "ngb", that perform bilinear and nearest neighbor interpolation, respectively. For more information on these methods, please refer to the documentation for \link[raster]{resample}. 
+#' The function provides the option to normalize data before processing, by using the `normalize` argument.
 #' The quantile mapping step involves calculating quantiles from the coarse data and mapping them to the fine data.
 #' The interpolation step uses the specified method to create a fine resolution grid from the coarse data.
 #' 
-#' @return A list containing the trained model components:
+#' @return Object of class `BCSD` containing the trained model components:
 #'   \item{quantile_map}{Quantile mapping function for bias correction.}
 #'   \item{interpolation_params}{Parameters for spatial interpolation.}
 #'   \item{axis_names}{Names of the axes in the fine data.}
@@ -168,15 +170,17 @@ bcsd <- function(coarse_data, fine_data, method = "bilinear", n_quantiles = 100,
 #' Predict method for BCSD model
 #' 
 #' @description
-#' Generates predictions using the trained BCSD model.
+#' This function generates predictions using a trained BCSD model.
 #' 
-#' @param object A BCSD model object.
-#' @param newdata Matrix, array or raster. The new coarse resolution data to be downscaled.
+#' @param object A BCSD model object, an output of the \link{bcsd} function.
+#' @param newdata Array or raster that has the new coarse resolution data to be downscaled. The resolution should match the resolution of the training data. 
+#' The first two dimensions are the spatial dimensions and the third refers to the training samples (e.g. time).
 #' @param ... Additional arguments (not used).
 #' 
 #' @details
 #' The predict method applies the trained BCSD model to new coarse resolution data.
-#' It performs bias correction using the quantile mapping function and then applies spatial interpolation
+#' It performs bias correction using the quantile mapping function and then applies 
+#' spatial interpolation, specified during model training with the `method` parameter,
 #' to generate fine resolution predictions.
 #' 
 #' @return A matrix, array or raster of the downscaled predictions at fine resolution.

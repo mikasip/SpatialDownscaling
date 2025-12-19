@@ -7,8 +7,12 @@
 #' for spatial downscaling of grid based data.
 #' The function allows an option for adding a temporal module for spatio-temporal applications.
 #'
-#' @param coarse_data A 3D array of shape (N_1, N_1, n) representing the input data. 
-#' @param fine_data A 3D array of shape (N_2, N_2, n) representing the target data.
+#' @param coarse_data A 3D array of shape (N_1, N_1, n) representing the coarse resolution input data in grid,
+#' where N_1 x N_1 is the coarse resolution and n is the sample size.
+#' The two first dimensions are the spatial coordinates and the third dimension refers to the samples (e.g. time).
+#' @param fine_data A 3D array of shape (N_2, N_2, n) representing the fine resolution target data in grid,
+#' where N_2 x N_2 is the fine resolution and n is the sample size.
+#' The two first dimensions are the spatial coordinates and the third dimension refers to the samples (e.g. time).
 #' @param time_points An optional numeric vector of length n representing the time points associated with each sample.
 #' @param val_coarse_data An optional 3D array of shape (N_1, N_1, n) representing the input validation data.
 #' @param val_fine_data An optional 3D array of shape (N_2, N_2, n) representing the target validation data.
@@ -18,7 +22,8 @@
 #' @param temporal_layers A numeric vector specifying the number of units in each dense layer for time encoding (default is c(32, 64, 128)).
 #' @param temporal_cnn_filters A numeric vector specifying the number of filters in each convolutional layer for temporal feature processing (default is c(8, 16)).
 #' @param temporal_cnn_kernel_sizes A list of integer vectors specifying the kernel sizes for each convolutional layer in the temporal feature processing (default is list(c(3, 3), c(3, 3))).
-#' @param activation A character string specifying the activation function to use (default is "relu").
+#' @param activation A character string specifying the activation function to use in the model to introduce nonlinearity.
+#' The options are listed in \url{https://keras.io/api/layers/activations}. Default is "relu".
 #' @param cos_sin_time A logical value indicating whether to use cosine and sine transformations for time encoding (default is FALSE).
 #' @param use_batch_norm A logical value indicating whether to use batch normalization in the residual blocks (default is FALSE).
 #' @param output_channels An integer specifying the number of output channels (default is 1).
@@ -82,7 +87,7 @@
 #' The encoded temporal features pass through a multilayer perceptron
 #' (`temporal_layers`) and are reshaped to spatial form before being concatenated
 #' with CNN features. This enables learning time-varying downscaling dynamics
-#' (e.g., seasonality, long-term trends).
+#' (e.g., seasonality, long-term trends). The function supports missing data via masking.
 #'
 #' @examples
 #' \dontrun{
@@ -377,11 +382,15 @@ srdrn <- function(coarse_data, fine_data, time_points = NULL,
 #' The predictions are then rescaled back to the original range.
 #' 
 #' @param object A trained SRDRN object.
-#' @param newdata A 3D array of shape (N_1, N_1, n) representing the new data to be predicted.
-#' @param time_points An optional vector of time points of the new data.
+#' @param newdata A 3D array of shape (N_1, N_1, n) representing the new coarse resolution data to be downscaled,
+#' where N_1 x N_1 is the coarse resolution of the training samples and n is the number of samples to be downscaled.
+#' The two first dimensions are the spatial coordinates in grid,
+#' and the third dimension refers to the samples (e.g. time).
+#' @param time_points An optional numeric vector of time points of the new data.
 #' @param ... Additional parameters (not used).
 #' 
-#' @return A 3D array of shape (N_2, N_2, n) representing the predicted data.
+#' @return A 3D array of shape (N_2, N_2, n) representing the predicted data, 
+#' where N_2 x N_2 is the fine resolution of the training samples.
 #' 
 #' @details
 #' The predict method for the SRDRN class takes a trained SRDRN object and new data as input. 

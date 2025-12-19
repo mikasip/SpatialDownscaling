@@ -32,9 +32,13 @@ srdrn(
 )
 }
 \arguments{
-\item{coarse_data}{A 3D array of shape (N_1, N_1, n) representing the input data.}
+\item{coarse_data}{A 3D array of shape (N_1, N_1, n) representing the coarse resolution input data in grid,
+where N_1 x N_1 is the coarse resolution and n is the sample size.
+The two first dimensions are the spatial coordinates and the third dimension refers to the samples (e.g. time).}
 
-\item{fine_data}{A 3D array of shape (N_2, N_2, n) representing the target data.}
+\item{fine_data}{A 3D array of shape (N_2, N_2, n) representing the fine resolution target data in grid,
+where N_2 x N_2 is the fine resolution and n is the sample size.
+The two first dimensions are the spatial coordinates and the third dimension refers to the samples (e.g. time).}
 
 \item{time_points}{An optional numeric vector of length n representing the time points associated with each sample.}
 
@@ -54,7 +58,8 @@ srdrn(
 
 \item{temporal_cnn_kernel_sizes}{A list of integer vectors specifying the kernel sizes for each convolutional layer in the temporal feature processing (default is list(c(3, 3), c(3, 3))).}
 
-\item{activation}{A character string specifying the activation function to use (default is "relu").}
+\item{activation}{A character string specifying the activation function to use in the model to introduce nonlinearity.
+The options are listed in \url{https://keras.io/api/layers/activations}. Default is "relu".}
 
 \item{cos_sin_time}{A logical value indicating whether to use cosine and sine transformations for time encoding (default is FALSE).}
 
@@ -136,7 +141,7 @@ Time is encoded either via:
 The encoded temporal features pass through a multilayer perceptron
 (\code{temporal_layers}) and are reshaped to spatial form before being concatenated
 with CNN features. This enables learning time-varying downscaling dynamics
-(e.g., seasonality, long-term trends).
+(e.g., seasonality, long-term trends). The function supports missing data via masking.
 }
 \examples{
 \dontrun{

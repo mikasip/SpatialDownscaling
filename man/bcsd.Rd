@@ -15,24 +15,25 @@ bcsd(
 )
 }
 \arguments{
-\item{coarse_data}{A 3D array of coarse resolution input data. The two first dimensions should be spatial coordinates
-(e.g., latitude and longitude) in grid, and the third should be the training samples (e.g. time).}
+\item{coarse_data}{A 3D array of coarse resolution input data. The two first dimensions are the spatial coordinates
+(e.g., latitude and longitude) in grid, and the third dimension refers to the training samples (e.g. time).}
 
-\item{fine_data}{A 3D array of fine resolution output data. The two first dimensions should be spatial coordinates
-(e.g., latitude and longitude) in grid, and the third should be the training samples (e.g. time).}
+\item{fine_data}{A 3D array of fine resolution output data. The two first dimensions are the spatial coordinates
+(e.g., latitude and longitude) in grid, and the third dimension refers to the training samples (e.g. time).}
 
-\item{method}{Character. Interpolation method ('bilinear', 'bicubic', or 'nearest'). Default: 'bilinear'.}
+\item{method}{Character. Interpolation method that is used by \link[raster]{resample} to perform predictions.
+The options are ('bilinear', 'ngb') that refer to bilinear and nearest neighbor interpolation, respectively. Default: 'bilinear'.}
 
 \item{n_quantiles}{Integer. Number of quantiles for bias correction. Default: 100.}
 
-\item{reference_period}{Vector. Start and end indices or dates for reference period. Default: NULL (use all data).}
+\item{reference_period}{Vector. Start and end indices for the reference period. Default: NULL (use all data).}
 
-\item{extrapolate}{Logical. Whether to extrapolate corrections outside calibration range. Default: TRUE.}
+\item{extrapolate}{Logical. Indicating whether to extrapolate corrections outside the range of the training data. Default: TRUE.}
 
-\item{normalize}{Logical. Whether to normalize data before processing. Default: TRUE.}
+\item{normalize}{Logical. Indicating whether to normalize data before processing. Default: TRUE.}
 }
 \value{
-A list containing the trained model components:
+Object of class \code{BCSD} containing the trained model components:
 \item{quantile_map}{Quantile mapping function for bias correction.}
 \item{interpolation_params}{Parameters for spatial interpolation.}
 \item{axis_names}{Names of the axes in the fine data.}
@@ -52,7 +53,8 @@ The BCSD method is a statistical downscaling technique that combines bias correc
 and spatial disaggregation. It uses quantile mapping to correct biases in coarse resolution data
 and then applies spatial interpolation to disaggregate the data to a finer resolution.
 
-The function allows for different interpolation methods and the option to normalize data before processing.
+The function allows for the interpolation methods "bilinear" and "ngb", that perform bilinear and nearest neighbor interpolation, respectively. For more information on these methods, please refer to the documentation for \link[raster]{resample}.
+The function provides the option to normalize data before processing, by using the \code{normalize} argument.
 The quantile mapping step involves calculating quantiles from the coarse data and mapping them to the fine data.
 The interpolation step uses the specified method to create a fine resolution grid from the coarse data.
 }
